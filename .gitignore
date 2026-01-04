@@ -1,14 +1,2 @@
-*
-!/**/
-!*.*
-*.hi
-*.o
-*.a
-*.so
-*.dylib
-*.dll
-*.lib
-*.exe
-*.out
-*.class
-*.jar
+.stack-work/
+*~
