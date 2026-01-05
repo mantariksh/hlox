@@ -2,6 +2,7 @@ module Main (main) where
 
 import Scan
 import Parse
+import Interpret
 import LoxError
 import System.IO
 import System.IO.Error
@@ -15,7 +16,8 @@ run s = case run' s of
             Left err     -> reportErr err
         where run' s' = do
                 tokens <- scan s'
-                parse tokens
+                expr <- parse tokens
+                interpret expr
 
 runPrompt :: IO ()
 runPrompt = do
