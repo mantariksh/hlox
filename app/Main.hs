@@ -12,12 +12,12 @@ import Control.Exception
 
 run :: String -> IO ()
 run s = case run' s of
-            Right out -> print out
+            Right ioAction -> ioAction
             Left err     -> reportErr err
         where run' s' = do
                 tokens <- scan s'
-                expr <- parse tokens
-                interpret expr
+                stmts <- parse tokens
+                interpret stmts
 
 runPrompt :: IO ()
 runPrompt = do

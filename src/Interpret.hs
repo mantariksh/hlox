@@ -14,7 +14,7 @@ handleBinary op@(Token Plus _) e1 e2 = case e1 of
         Literal _ ->
             Left (makeTokenErr op "Operand must be a number.")
         _ -> do
-            e2' <- interpret e2
+            e2' <- evaluate e2
             handleBinary op e1 e2'
     Literal (Token (String s1) ln1) -> case e2 of
         Literal (Token (String s2) _) ->
@@ -22,12 +22,12 @@ handleBinary op@(Token Plus _) e1 e2 = case e1 of
         Literal _ ->
             Left (makeTokenErr op "Operand must be a string.")
         _ -> do
-            e2' <- interpret e2
+            e2' <- evaluate e2
             handleBinary op e1 e2'
     Literal _ ->
         Left (makeTokenErr op "Operand must be a number or string.")
     _ -> do
-        e1' <- interpret e1
+        e1' <- evaluate e1
         handleBinary op e1' e2
 
 handleBinary op@(Token Minus _) e1 e2 = binaryNumNumHelper (-) op e1 e2
@@ -43,12 +43,12 @@ handleBinary op@(Token Slash _) e1 e2 = case e1 of
         Literal _ ->
             Left (makeTokenErr op "Operand must be a number.")
         _ -> do
-            e2' <- interpret e2
+            e2' <- evaluate e2
             handleBinary op e1 e2'
     Literal _ ->
         Left (makeTokenErr op "Operand must be a number.")
     _ -> do
-        e1' <- interpret e1
+        e1' <- evaluate e1
         handleBinary op e1' e2
 
 handleBinary op@(Token EqualEqual _) e1 e2 =
@@ -59,7 +59,7 @@ handleBinary op@(Token EqualEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token FalseToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token (String s1) ln1) -> case e2 of
             Literal (Token (String s2) _) ->
@@ -67,7 +67,7 @@ handleBinary op@(Token EqualEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token FalseToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token TrueToken ln1) -> case e2 of
             Literal (Token TrueToken _) ->
@@ -75,7 +75,7 @@ handleBinary op@(Token EqualEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token FalseToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token FalseToken ln1) -> case e2 of
             Literal (Token FalseToken _) ->
@@ -83,14 +83,14 @@ handleBinary op@(Token EqualEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token FalseToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token Nil ln1) -> case e2 of
             Literal (Token Nil _) ->
                 return (Literal (Token TrueToken ln1))
             _ -> return (Literal (Token FalseToken ln1))
         _ -> do
-            e1' <- interpret e1
+            e1' <- evaluate e1
             handleBinary op e1' e2
 
 handleBinary op@(Token BangEqual _) e1 e2 =
@@ -101,7 +101,7 @@ handleBinary op@(Token BangEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token FalseToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token (String s1) ln1) -> case e2 of
             Literal (Token (String s2) _) ->
@@ -109,7 +109,7 @@ handleBinary op@(Token BangEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token FalseToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token TrueToken ln1) -> case e2 of
             Literal (Token TrueToken _) ->
@@ -117,7 +117,7 @@ handleBinary op@(Token BangEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token TrueToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token FalseToken ln1) -> case e2 of
             Literal (Token FalseToken _) ->
@@ -125,14 +125,14 @@ handleBinary op@(Token BangEqual _) e1 e2 =
             Literal _ ->
                 return (Literal (Token TrueToken ln1))
             _ -> do
-                e2' <- interpret e2
+                e2' <- evaluate e2
                 handleBinary op e1 e2'
         Literal (Token Nil ln1) -> case e2 of
             Literal (Token Nil _) ->
                 return (Literal (Token FalseToken ln1))
             _ -> return (Literal (Token TrueToken ln1))
         _ -> do
-            e1' <- interpret e1
+            e1' <- evaluate e1
             handleBinary op e1' e2
 
 handleBinary op@(Token Greater _) e1 e2 =
@@ -154,12 +154,12 @@ binaryNumNumHelper f op e1 e2 = case e1 of
         Literal _ ->
             Left (makeTokenErr op "Operand must be a number.")
         _ -> do
-            e2' <- interpret e2
+            e2' <- evaluate e2
             handleBinary op e1 e2'
     Literal _ ->
         Left (makeTokenErr op "Operand must be a number.")
     _ -> do
-        e1' <- interpret e1
+        e1' <- evaluate e1
         handleBinary op e1' e2
 
 binaryNumBoolHelper :: (Double -> Double -> Bool) -> Token -> Expr -> Expr -> Either LoxError Expr
@@ -170,12 +170,12 @@ binaryNumBoolHelper f op e1 e2 = case e1 of
         Literal _ ->
             Left (makeTokenErr op "Operand must be a number.")
         _ -> do
-            e2' <- interpret e2
+            e2' <- evaluate e2
             handleBinary op e1 e2'
     Literal _ ->
         Left (makeTokenErr op "Operand must be a number.")
     _ -> do
-        e1' <- interpret e1
+        e1' <- evaluate e1
         handleBinary op e1' e2
 
 handleUnary :: Token -> Expr -> Either LoxError Expr
@@ -183,7 +183,7 @@ handleUnary op@(Token Minus _) e = case e of
     Literal (Token (Number n) ln) -> return (Literal (Token (Number (-n)) ln))
     Literal t -> Left (makeTokenErr t "Expected number for negation.")
     _ -> do
-        e' <- interpret e
+        e' <- evaluate e
         handleUnary op e'
 -- As per spec, false and nil are falsey, everything else is truthy
 handleUnary op@(Token Bang _) e = case e of
@@ -191,14 +191,25 @@ handleUnary op@(Token Bang _) e = case e of
     Literal (Token Nil ln) -> return (Literal (Token TrueToken ln))
     Literal (Token _ ln) -> return (Literal (Token FalseToken ln))
     _ -> do
-        e' <- interpret e
+        e' <- evaluate e
         handleUnary op e'
 handleUnary token _ = Left (makeTokenErr token "Unexpected token.")
 
 -- The idea is to boil down an expression to a literal value
-interpret :: Expr -> Either LoxError Expr
-interpret expr = case expr of
+evaluate :: Expr -> Either LoxError Expr
+evaluate expr = case expr of
     Literal l -> Right (Literal l)
-    Grouping e -> interpret e
+    Grouping e -> evaluate e
     Unary op e -> handleUnary op e
     Binary e1 op e2 -> handleBinary op e1 e2
+
+interpret :: [Stmt] -> Either LoxError (IO ())
+interpret stmts = go stmts
+    where go [] = Right (return ())
+          go ((ExprStmt e):stmts') = do
+            _ <- evaluate e
+            go stmts'
+          go (PrintStmt e:stmts') = do
+            r <- evaluate e
+            rest <- go stmts'
+            return (print r >> rest)

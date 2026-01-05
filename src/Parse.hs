@@ -1,6 +1,7 @@
 module Parse
-( parse,
-  Expr(..)
+( parse
+, Expr(..)
+, Stmt(..)
 ) where
 
 import Token
@@ -16,6 +17,11 @@ data Expr =
   | Binary Expr Token Expr
   deriving (Eq)
 
+data Stmt =
+    ExprStmt Expr
+  | PrintStmt Expr
+  deriving (Eq, Show)
+
 instance Show Expr where
     show (Literal (Token t _)) = show t
     show (Grouping e) = "(group " ++ show e ++ ")"
@@ -24,6 +30,8 @@ instance Show Expr where
 
 type RecursiveDescent = [Token] -> Either LoxError (Expr, [Token])
 type RecursiveDescentMatcher = Expr -> [Token] -> Either LoxError (Expr, [Token])
+
+type StmtState = Either LoxError (Stmt, [Token])
 
 primary :: RecursiveDescent
 primary ts = case ts of
@@ -126,9 +134,36 @@ equality ts = do
 expression :: RecursiveDescent
 expression = equality
 
-parse :: [Token] -> Either LoxError Expr
-parse ts = case expression ts of
-    Left e -> Left e
-    Right (e, [Token EOF _]) -> Right e
-    Right (_, t:_) -> Left (makeTokenErr t "Expect 'EOF'.")
-    Right (_, []) -> Left (LoxError 1 "" "Expect 'EOF'.")
+printStatement :: Token -> [Token] -> StmtState
+printStatement t ts1 = do
+    (expr, ts2) <- expression ts1
+    case ts2 of
+        ((Token Semicolon _):ts3) ->
+            return (PrintStmt expr, ts3)
+        _ ->
+            Left (makeTokenErr t "Expect ';' after value.")
+
+expressionStatement :: [Token] -> StmtState
+expressionStatement ts = do
+    (expr, ts1) <- expression ts
+    case ts1 of
+        ((Token Semicolon _):ts2) ->
+            return (ExprStmt expr, ts2)
+        (t:_) ->
+            Left (makeTokenErr t "Expect ';' after expression.")
+        [] ->
+            Left (LoxError 1 "" "Expect ';' after expression.")
+
+statement :: [Token] -> StmtState
+statement ts = case ts of
+    (t@(Token Print _):ts1) -> 
+        printStatement t ts1
+    _ -> expressionStatement ts
+
+
+parse :: [Token] -> Either LoxError [Stmt]
+parse [Token EOF _] = return []
+parse ts = do
+    (stmt, ts1) <- statement ts
+    stmts <- parse ts1
+    return (stmt:stmts)
