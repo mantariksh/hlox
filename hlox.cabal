@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      LoxError
+      Scan
+      Token
   other-modules:
       Paths_hlox
   autogen-modules:
