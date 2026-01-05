@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Scan
+import Parse
 import LoxError
 import System.IO
 import System.IO.Error
@@ -12,7 +13,9 @@ run :: String -> IO ()
 run s = case run' s of
             Right out -> print out
             Left err     -> reportErr err
-        where run' = scan
+        where run' s' = do
+                tokens <- scan s'
+                parse tokens
 
 runPrompt :: IO ()
 runPrompt = do
