@@ -24,6 +24,7 @@ data Stmt =
   | PrintStmt Expr
   | VarStmt Token Expr
   | VarStmtNoInit Token
+  | Block [Stmt]
   deriving (Eq, Show)
 
 instance Show Expr where
@@ -175,10 +176,27 @@ expressionStatement ts = do
         [] ->
             Left (LoxError 1 "" "Expect ';' after expression.")
 
+block' :: Token -> [Token] -> Either LoxError ([Stmt], [Token])
+block' leftBrace [] =
+    Left (makeTokenErr leftBrace "Expect '}' after block.")
+block' _ ((Token RightBrace _):ts2) =
+    return ([], ts2)
+block' leftBrace ts2 = do
+    (stmt, ts3) <- statement ts2
+    (stmts, ts4) <- block' leftBrace ts3
+    return (stmt:stmts, ts4)
+
+block :: Token -> [Token] -> StmtState
+block leftBrace ts = do
+    (stmts, ts1) <- block' leftBrace ts
+    return (Block stmts, ts1)
+
 nonDeclaration :: [Token] -> StmtState
 nonDeclaration ts = case ts of
     (t@(Token Print _):ts1) -> 
         printStatement t ts1
+    t@(Token LeftBrace _):ts1 ->
+        block t ts1
     _ -> expressionStatement ts
 
 declaration :: [Token] -> StmtState
@@ -204,18 +222,15 @@ declaration ts = case ts of
     [] ->
         Left (LoxError 1 "" "Expect variable name.")
 
-
+-- The book uses "statement" vs "declaration" somewhat confusingly.
+-- Here we use "statement" as the top-level construct, which then
+-- splits into declarations and non-declarations.
 statement :: [Token] -> StmtState
 statement ts = case ts of
     ((Token Var _):ts1) -> 
         declaration ts1
     _ ->
         nonDeclaration ts
-
--- The book uses "statement" vs "declaration" somewhat confusingly.
--- Here we use "statement" as the top-level construct, which then
--- splits into declarations and non-declarations.
-
 
 parse :: [Token] -> Either LoxError [Stmt]
 parse [Token EOF _] = return []

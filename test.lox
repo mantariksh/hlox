@@ -10,3 +10,9 @@ print c;
 
 var d = 1;
 print d = 2; // "2".
+
+{
+    var e = 1;
+    var f = 2;
+    print e + f;
+}
