@@ -16,6 +16,7 @@ data Expr =
   | Unary Token Expr
   | Binary Expr Token Expr
   | Variable Token
+  | Assign Expr Expr
   deriving (Eq)
 
 data Stmt =
@@ -31,6 +32,7 @@ instance Show Expr where
     show (Unary (Token op _) e) = '(':(show op) ++ show e ++ ")"
     show (Binary e1 (Token op _) e2) = '(':(show e1) ++ " " ++ show op ++ " " ++ show e2 ++ ")"
     show (Variable (Token s _)) = show s
+    show (Assign lhs rhs) = show lhs ++ " = " ++ show rhs
 
 type RecursiveDescent = [Token] -> Either LoxError (Expr, [Token])
 type RecursiveDescentMatcher = Expr -> [Token] -> Either LoxError (Expr, [Token])
@@ -137,8 +139,21 @@ equality ts = do
     (lhs, ts1) <- comparison ts
     equality' lhs ts1
 
+assignment :: RecursiveDescent
+assignment ts = do
+    (lhs, ts1) <- equality ts
+    case ts1 of
+        (t@(Token Equal _):ts2) -> case lhs of
+            v@(Variable _) -> do
+                (rhs, ts3) <- assignment ts2
+                return (Assign v rhs, ts3)
+            _ ->
+                Left (makeTokenErr t "Invalid assignment target.")
+        _ ->
+            return (lhs, ts1)
+
 expression :: RecursiveDescent
-expression = equality
+expression = assignment
 
 printStatement :: Token -> [Token] -> StmtState
 printStatement t ts1 = do

@@ -1,9 +1,12 @@
-var a = 1;
-var b = a;
-print b + 1;
+var b;
+var a = b = 1;
+var c = 3;
+print c * c;
+print b;
 
-var c = (a + 1) * 5 + 2 * b;
-print c + a;
+var c;
+c = 5;
+print c;
 
-var d;
-print d;
+var d = 1;
+print d = 2; // "2".

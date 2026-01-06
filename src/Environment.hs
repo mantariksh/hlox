@@ -3,6 +3,7 @@ module Environment
 , define
 , getVar
 , emptyEnv
+, assignVar
 ) where
 
 import qualified Data.Map as M
@@ -26,3 +27,13 @@ getVar (env:envs) t@(Token (Identifier s) _) =
         Nothing -> getVar envs t
         Just e  -> return e
 getVar _ t = Left (makeTokenErr t "Expected identifier.")
+
+assignVar :: Environment -> Token -> Expr -> Either LoxError Environment
+assignVar [] t _ = Left (makeTokenErr t "Undefined variable.")
+assignVar (env:envs) t@(Token (Identifier s) _) e =
+    case M.lookup s env of
+        Nothing -> do
+            envs' <- assignVar envs t e
+            return (env:envs')
+        Just _ -> return (M.insert s e env:envs)
+assignVar _ t _ = Left (makeTokenErr t "Expected identifier.")
