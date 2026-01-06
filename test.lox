@@ -1,4 +1,9 @@
-print 1+1;
-print (3 + 1) * 5 == 20;
-print "abc";
-print "a" + "b" == "ab";
+var a = 1;
+var b = a;
+print b + 1;
+
+var c = (a + 1) * 5 + 2 * b;
+print c + a;
+
+var d;
+print d;

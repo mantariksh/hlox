@@ -70,7 +70,7 @@ instance Show TokenType where
     show GreaterEqual = ">="
     show Less = "<"
     show LessEqual = "<="
-    show (Identifier s) = "identifier " ++ s
+    show (Identifier s) = s
     show (String s) = s
     show (Number x) = show x
     show And = "and"

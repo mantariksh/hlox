@@ -15,11 +15,14 @@ data Expr =
   | Grouping Expr
   | Unary Token Expr
   | Binary Expr Token Expr
+  | Variable Token
   deriving (Eq)
 
 data Stmt =
     ExprStmt Expr
   | PrintStmt Expr
+  | VarStmt Token Expr
+  | VarStmtNoInit Token
   deriving (Eq, Show)
 
 instance Show Expr where
@@ -27,6 +30,7 @@ instance Show Expr where
     show (Grouping e) = "(group " ++ show e ++ ")"
     show (Unary (Token op _) e) = '(':(show op) ++ show e ++ ")"
     show (Binary e1 (Token op _) e2) = '(':(show e1) ++ " " ++ show op ++ " " ++ show e2 ++ ")"
+    show (Variable (Token s _)) = show s
 
 type RecursiveDescent = [Token] -> Either LoxError (Expr, [Token])
 type RecursiveDescentMatcher = Expr -> [Token] -> Either LoxError (Expr, [Token])
@@ -54,6 +58,8 @@ primary ts = case ts of
         return (Literal t, ts1)
     (t@(Token Nil _):ts1) ->
         return (Literal t, ts1)
+    (t@(Token (Identifier _) _):ts1) ->
+        return (Variable t, ts1)
     (t:_) -> 
         Left (makeTokenErr t "Expect expression.")
     [] ->
@@ -154,11 +160,46 @@ expressionStatement ts = do
         [] ->
             Left (LoxError 1 "" "Expect ';' after expression.")
 
-statement :: [Token] -> StmtState
-statement ts = case ts of
+nonDeclaration :: [Token] -> StmtState
+nonDeclaration ts = case ts of
     (t@(Token Print _):ts1) -> 
         printStatement t ts1
     _ -> expressionStatement ts
+
+declaration :: [Token] -> StmtState
+declaration ts = case ts of
+    (idToken@(Token (Identifier _) _):ts1) -> case ts1 of
+        (Token Equal _):ts2 -> do
+            (initExpr, ts3) <- expression ts2
+            case ts3 of
+                (Token Semicolon _):ts4 ->
+                    return (VarStmt idToken initExpr, ts4)
+                (t:_) ->
+                    Left (makeTokenErr t "Expect ';' after variable declaration.")
+                [] ->
+                    Left (LoxError 1 "" "Expect ';' after variable declaration.")
+        (Token Semicolon _):ts2 ->
+            return (VarStmtNoInit idToken, ts2)
+        (t:_) ->
+            Left (makeTokenErr t "Expect '=' or ';' after variable name.")
+        [] ->
+            Left (LoxError 1 "" "Expect '=' or ';' after variable name.")
+    (t:_) ->
+        Left (makeTokenErr t "Expect variable name.")
+    [] ->
+        Left (LoxError 1 "" "Expect variable name.")
+
+
+statement :: [Token] -> StmtState
+statement ts = case ts of
+    ((Token Var _):ts1) -> 
+        declaration ts1
+    _ ->
+        nonDeclaration ts
+
+-- The book uses "statement" vs "declaration" somewhat confusingly.
+-- Here we use "statement" as the top-level construct, which then
+-- splits into declarations and non-declarations.
 
 
 parse :: [Token] -> Either LoxError [Stmt]
