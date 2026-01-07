@@ -160,6 +160,13 @@ interpret' (VarStmtNoInit (Token (Identifier s) _)) = do
 
 interpret' (VarStmtNoInit t) = throwError (makeTokenErr t "Expected identifier.")
 
+interpret' (Block stmts) = do
+    env <- get
+    put (pushCtx env)
+    mapM_ interpret' stmts
+    env' <- get
+    put (popCtx env')
+
 interpret :: [Stmt] -> IO (Either LoxError ())
 interpret stmts = do
     (possibleErr, _) <- runStateT (runExceptT (mapM_ interpret' stmts)) emptyEnv

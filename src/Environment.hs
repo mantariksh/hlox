@@ -4,6 +4,8 @@ module Environment
 , getVar
 , emptyEnv
 , assignVar
+, pushCtx
+, popCtx
 ) where
 
 import ExprOut
@@ -37,3 +39,10 @@ assignVar (env:envs) t@(Token (Identifier s) _) e =
             return (env:envs')
         Just _ -> return (M.insert s e env:envs)
 assignVar _ t _ = Left (makeTokenErr t "Expected identifier.")
+
+pushCtx :: Environment -> Environment
+pushCtx envs = M.empty:envs
+
+popCtx :: Environment -> Environment
+popCtx [] = []
+popCtx (_:envs) = envs
