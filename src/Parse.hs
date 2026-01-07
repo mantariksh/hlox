@@ -25,6 +25,8 @@ data Stmt =
   | VarStmt Token Expr
   | VarStmtNoInit Token
   | Block [Stmt]
+  | IfThenElse Expr Stmt Stmt
+  | IfThen Expr Stmt
   deriving (Eq, Show)
 
 instance Show Expr where
@@ -191,8 +193,28 @@ block leftBrace ts = do
     (stmts, ts1) <- block' leftBrace ts
     return (Block stmts, ts1)
 
+ifStatement :: Token -> [Token] -> StmtState
+ifStatement ifToken ts1 =
+    case ts1 of
+        Token LeftParen _:ts2 -> do
+            (cond, ts3) <- expression ts2
+            case ts3 of
+                Token RightParen _:ts4 -> do
+                    (thenStmt, ts5) <- nonDeclaration ts4
+                    case ts5 of
+                        Token Else _:ts6 -> do
+                            (elseStmt, ts7) <- nonDeclaration ts6
+                            return (IfThenElse cond thenStmt elseStmt, ts7)
+                        _ ->
+                            return (IfThen cond thenStmt, ts5)
+                _ -> Left (makeTokenErr ifToken "Expect ')' after if condition.")
+        _ -> Left (makeTokenErr ifToken "Expect '(' after 'if'.")
+
+
 nonDeclaration :: [Token] -> StmtState
 nonDeclaration ts = case ts of
+    (t@(Token If _):ts1) ->
+        ifStatement t ts1
     (t@(Token Print _):ts1) -> 
         printStatement t ts1
     t@(Token LeftBrace _):ts1 ->

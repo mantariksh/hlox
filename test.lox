@@ -1,19 +1,11 @@
-var a = "global a";
-var b = "global b";
-var c = "global c";
-{
-  var a = "outer a";
-  var b = "outer b";
-  {
-    var a = "inner a";
-    print a;
-    print b;
-    print c;
-  }
-  print a;
-  print b;
-  print c;
+var a = 1;
+var b = 2;
+
+if (a == b) {
+    print 5;
+} else {
+    a = 3;
+    print 10;
 }
+
 print a;
-print b;
-print c;

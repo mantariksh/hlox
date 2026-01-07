@@ -65,16 +65,18 @@ binaryNumBoolHelper f op e1 e2 = case (e1, e2) of
     (NumOut n1, NumOut n2) -> return $ BoolOut (f n1 n2)
     _ -> throwError (makeTokenErr op "Operand must be a number.")
 
+-- As per spec, false and nil are falsey, everything else is truthy
+isTruthy :: ExprOut -> Bool
+isTruthy (BoolOut False) = False
+isTruthy (NilOut)        = False
+isTruthy _               = True
+
 handleUnary :: Token -> ExprOut -> Eval ExprOut
 handleUnary op@(Token Minus _) e = case e of
     NumOut n -> return $ NumOut (-n)
     _        -> throwError (makeTokenErr op "Expected number for negation.")
 
--- As per spec, false and nil are falsey, everything else is truthy
-handleUnary (Token Bang _) e = case e of
-    BoolOut False -> return $ BoolOut True
-    NilOut        -> return $ BoolOut True
-    _             -> return $ BoolOut False
+handleUnary (Token Bang _) e = return $ BoolOut ((not . isTruthy) e)
 
 handleUnary token _ = throwError (makeTokenErr token "Unexpected token.")
 
@@ -137,18 +139,21 @@ liftEval eval = do
         Left err -> throwError err
         Right exprOut -> return exprOut
 
+evaluateM :: Expr -> Interpret ExprOut
+evaluateM e = liftEval $ evaluate e
+
 interpret' :: Stmt -> Interpret ()
 interpret' (ExprStmt e) = do
     -- Throw away output of expression, e.g. 1 + 1;
-    _ <- liftEval $ evaluate e
+    _ <- evaluateM e
     return ()
 
 interpret' (PrintStmt e) = do
-    out <- liftEval $ evaluate e
+    out <- evaluateM e
     liftIO $ print out
 
 interpret' (VarStmt (Token (Identifier s) _) e) = do
-    rhs <- liftEval $ evaluate e
+    rhs <- evaluateM e
     env <- get
     put (define env s rhs)
 
@@ -166,6 +171,18 @@ interpret' (Block stmts) = do
     mapM_ interpret' stmts
     env' <- get
     put (popCtx env')
+
+interpret' (IfThenElse cond thenStmt elseStmt) = do
+    condOut <- evaluateM cond
+    if isTruthy condOut
+        then interpret' thenStmt
+        else interpret' elseStmt
+
+interpret' (IfThen cond thenStmt) = do
+    condOut <- evaluateM cond
+    if isTruthy condOut
+        then interpret' thenStmt
+        else return ()
 
 interpret :: [Stmt] -> IO (Either LoxError ())
 interpret stmts = do
