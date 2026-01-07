@@ -10,14 +10,21 @@ import System.Environment
 import Data.Char
 import Control.Exception
 
+runScanParse :: String -> Either LoxError [Stmt]
+runScanParse s = do
+    tokens <- scan s
+    parse tokens
+
 run :: String -> IO ()
-run s = case run' s of
-            Right ioAction -> ioAction
-            Left err     -> reportErr err
-        where run' s' = do
-                tokens <- scan s'
-                stmts <- parse tokens
-                interpret stmts
+-- Scanning and parsing: pure phase
+run s = case runScanParse s of
+    Left err -> reportErr err
+    Right stmts -> do
+        -- Interpreting: effectful phase (with IO)
+        possibleErr <- interpret stmts
+        case possibleErr of
+            Left err -> reportErr err
+            Right _  -> return ()
 
 runPrompt :: IO ()
 runPrompt = do

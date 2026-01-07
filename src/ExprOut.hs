@@ -12,5 +12,5 @@ data ExprOut =
 instance Show ExprOut where
     show (StrOut s) = s
     show (NumOut n) = show n
-    show (BoolOut b) = show b
+    show (BoolOut b) = if b then "true" else "false"
     show NilOut = "nil"
