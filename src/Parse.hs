@@ -6,6 +6,8 @@ module Parse
 
 import Token
 import LoxError
+import Control.Monad.State
+import Control.Monad.Except
 
 -- We store underlying tokens where possible so we can
 -- subsequently report the line number of the operation if
@@ -37,226 +39,259 @@ instance Show Expr where
     show (Variable (Token s _)) = show s
     show (Assign lhs rhs) = show lhs ++ " = " ++ show rhs
 
-type RecursiveDescent = [Token] -> Either LoxError (Expr, [Token])
-type RecursiveDescentMatcher = Expr -> [Token] -> Either LoxError (Expr, [Token])
+-- Model parsing as a state change from a [Token] (representing the remaining tokens)
+-- to another [Token], possibly producing an error.
+-- [Token] -> Either LoxError a, [Token]
+type Parse = ExceptT LoxError (State [Token])
 
-type StmtState = Either LoxError (Stmt, [Token])
+peekT :: Parse Token
+peekT = do
+    tokens <- get
+    case tokens of
+        []   -> throwError (LoxError 1 "" "Expected EOF.")
+        t:_ -> return t
 
-primary :: RecursiveDescent
-primary ts = case ts of
-    ((Token LeftParen ln):ts1) -> do
-        (e, ts2) <- expression ts1
-        case ts2 of
-            ((Token RightParen _):ts3) ->
-                return (Grouping e, ts3)
-            (t:_) ->
-                Left (makeTokenErr t "Expect ')' after expression.")
-            _ ->
-                Left (LoxError ln "" "Expect ')' after expression.")
-    (t@(Token (Number _) _):ts1) -> 
-        return (Literal t, ts1)
-    (t@(Token (String _) _):ts1) ->
-        return (Literal t, ts1)
-    (t@(Token TrueToken _):ts1) ->
-        return (Literal t, ts1)
-    (t@(Token FalseToken _):ts1) ->
-        return (Literal t, ts1)
-    (t@(Token Nil _):ts1) ->
-        return (Literal t, ts1)
-    (t@(Token (Identifier _) _):ts1) ->
-        return (Variable t, ts1)
-    (t:_) -> 
-        Left (makeTokenErr t "Expect expression.")
-    [] ->
-        Left (LoxError 1 "" "Expect expression.")
+popT :: Parse Token
+popT = do
+    tokens <- get
+    case tokens of
+        []   -> throwError (LoxError 1 "" "Expected EOF.")
+        t:ts -> do
+            put ts
+            return t
 
-unary :: RecursiveDescent
-unary ts = case ts of
-            (t@(Token Bang _):ts1) -> helper ts1 t
-            (t@(Token Minus _):ts1) -> helper ts1 t
-            _ -> primary ts
-            where
-                helper ts1 op = do
-                    (expr, ts2) <- unary ts1
-                    return (Unary op expr, ts2)
+throwTokenErr :: Token -> String -> Parse a
+throwTokenErr t msg = throwError (makeTokenErr t msg)
 
-factor' :: RecursiveDescentMatcher
-factor' lhs ts1 = case ts1 of
-    (t@(Token Star _):ts2) -> helper ts2 t
-    (t@(Token Slash _):ts2) -> helper ts2 t
-    _ -> return (lhs, ts1)
-    where
-        helper ts2 op = do
-            (rhs, ts3) <- unary ts2
-            factor' (Binary lhs op rhs) ts3
-
-factor :: RecursiveDescent
-factor ts = do
-    (lhs, ts1) <- unary ts
-    factor' lhs ts1
-
-term' :: RecursiveDescentMatcher
-term' lhs ts1 = case ts1 of
-    (t@(Token Plus _):ts2) -> helper ts2 t
-    (t@(Token Minus _):ts2) -> helper ts2 t
-    _ -> return (lhs, ts1)
-    where
-        helper ts2 op = do
-            (rhs, ts3) <- factor ts2
-            term' (Binary lhs op rhs) ts3
-
-term :: RecursiveDescent
-term ts = do
-    (lhs, ts1) <- factor ts
-    term' lhs ts1
-
-comparison' :: RecursiveDescentMatcher
-comparison' lhs ts1 = case ts1 of
-    (t@(Token Greater _):ts2) -> helper ts2 t
-    (t@(Token GreaterEqual _):ts2) -> helper ts2 t
-    (t@(Token Less _):ts2) -> helper ts2 t
-    (t@(Token LessEqual _):ts2) -> helper ts2 t
-    _ -> return (lhs, ts1)
-    where
-        helper ts2 op = do
-            (rhs, ts3) <- term ts2
-            comparison' (Binary lhs op rhs) ts3
-
-comparison :: RecursiveDescent
-comparison ts = do
-    (lhs, ts1) <- term ts
-    comparison' lhs ts1
-
-equality' :: RecursiveDescentMatcher
-equality' lhs ts1 = case ts1 of
-    (t@(Token BangEqual _):ts2) -> helper ts2 t
-    (t@(Token EqualEqual _):ts2) -> helper ts2 t
-    _ -> return (lhs, ts1)
-    where
-        helper ts2 op = do
-            (rhs, ts3) <- comparison ts2
-            equality' (Binary lhs op rhs) ts3
-
-equality :: RecursiveDescent
-equality ts = do
-    (lhs, ts1) <- comparison ts
-    equality' lhs ts1
-
-assignment :: RecursiveDescent
-assignment ts = do
-    (lhs, ts1) <- equality ts
-    case ts1 of
-        (t@(Token Equal _):ts2) -> case lhs of
-            v@(Variable _) -> do
-                (rhs, ts3) <- assignment ts2
-                return (Assign v rhs, ts3)
-            _ ->
-                Left (makeTokenErr t "Invalid assignment target.")
+primary :: Parse Expr
+primary = do
+    t <- popT
+    case t of
+        Token LeftParen _ -> do
+            e <- expression
+            t2 <- popT
+            case t2 of
+                Token RightParen _ ->
+                    return (Grouping e)
+                _ ->
+                    throwTokenErr t "Expect ')' after expression."
+        Token (Number _) _ ->
+            return (Literal t)
+        Token (String _) _ ->
+            return (Literal t)
+        Token TrueToken _ ->
+            return (Literal t)
+        Token FalseToken _ ->
+            return (Literal t)
+        Token Nil _ ->
+            return (Literal t)
+        Token (Identifier _) _ ->
+            return (Variable t)
         _ ->
-            return (lhs, ts1)
+            throwTokenErr t "Expect expression."
 
-expression :: RecursiveDescent
+unary :: Parse Expr
+unary = do
+    t <- peekT
+    case t of
+        Token Bang _ -> unary' t
+        Token Minus _ -> unary' t
+        _ -> primary
+        where
+            unary' op = do
+                _ <- popT
+                expr <- unary
+                return (Unary op expr)
+
+factor' :: Expr -> Parse Expr
+factor' lhs = do
+    t <- peekT
+    case t of
+        Token Star _ -> helper t
+        Token Slash _ -> helper t
+        _ -> return lhs
+        where
+            helper op = do
+                _ <- popT
+                rhs <- unary
+                factor' (Binary lhs op rhs)
+
+factor :: Parse Expr
+factor = do
+    lhs <- unary
+    factor' lhs
+
+term' :: Expr -> Parse Expr
+term' lhs = do
+    t <- peekT
+    case t of
+        Token Plus _ -> helper t
+        Token Minus _ -> helper t
+        _ -> return lhs
+        where
+            helper op = do
+                _ <- popT
+                rhs <- factor
+                term' (Binary lhs op rhs)
+
+term :: Parse Expr
+term = do
+    lhs <- factor
+    term' lhs
+
+comparison' :: Expr -> Parse Expr
+comparison' lhs = do
+    t <- peekT
+    case t of
+        Token Greater _ -> helper t
+        Token GreaterEqual _ -> helper t
+        Token Less _ -> helper t
+        Token LessEqual _ -> helper t
+        _ -> return lhs
+        where
+            helper op = do
+                _ <- popT
+                rhs <- term
+                comparison' (Binary lhs op rhs)
+
+comparison :: Parse Expr
+comparison = do
+    lhs <- term
+    comparison' lhs
+
+equality' :: Expr -> Parse Expr
+equality' lhs = do
+    t <- peekT
+    case t of
+        Token BangEqual _ -> helper t
+        Token EqualEqual _ -> helper t
+        _ -> return lhs
+        where
+            helper op = do
+                _ <- popT
+                rhs <- comparison
+                equality' (Binary lhs op rhs)
+
+equality :: Parse Expr
+equality = do
+    lhs <- comparison
+    equality' lhs
+
+assignment :: Parse Expr
+assignment = do
+    lhs <- equality
+    t <- peekT
+    case t of
+        Token Equal _ -> do
+            _ <- popT
+            case lhs of
+                Variable _ -> do
+                    rhs <- assignment
+                    return (Assign lhs rhs)
+                _ -> throwTokenErr t "Invalid assignment target."
+        _ -> return lhs
+
+expression :: Parse Expr
 expression = assignment
 
-printStatement :: Token -> [Token] -> StmtState
-printStatement t ts1 = do
-    (expr, ts2) <- expression ts1
-    case ts2 of
-        ((Token Semicolon _):ts3) ->
-            return (PrintStmt expr, ts3)
+printStatement :: Parse Stmt
+printStatement = do
+    expr <- expression
+    t <- popT
+    case t of
+        Token Semicolon _ ->
+            return (PrintStmt expr)
         _ ->
-            Left (makeTokenErr t "Expect ';' after value.")
+            throwTokenErr t "Expect ';' after value."
 
-expressionStatement :: [Token] -> StmtState
-expressionStatement ts = do
-    (expr, ts1) <- expression ts
-    case ts1 of
-        ((Token Semicolon _):ts2) ->
-            return (ExprStmt expr, ts2)
-        (t:_) ->
-            Left (makeTokenErr t "Expect ';' after expression.")
-        [] ->
-            Left (LoxError 1 "" "Expect ';' after expression.")
+expressionStatement :: Parse Stmt
+expressionStatement = do
+    expr <- expression
+    t <- popT
+    case t of
+        Token Semicolon _ ->
+            return (ExprStmt expr)
+        _ ->
+            throwTokenErr t "Expect ';' after expression."
 
-block' :: Token -> [Token] -> Either LoxError ([Stmt], [Token])
-block' leftBrace [] =
-    Left (makeTokenErr leftBrace "Expect '}' after block.")
-block' _ ((Token RightBrace _):ts2) =
-    return ([], ts2)
-block' leftBrace ts2 = do
-    (stmt, ts3) <- statement ts2
-    (stmts, ts4) <- block' leftBrace ts3
-    return (stmt:stmts, ts4)
+block' :: [Stmt] -> Parse Stmt
+block' stmts = do
+    t <- peekT
+    case t of
+        Token RightBrace _ ->
+            popT >> return (Block stmts)
+        _ -> do
+            stmt <- statement
+            block' (stmt:stmts)
 
-block :: Token -> [Token] -> StmtState
-block leftBrace ts = do
-    (stmts, ts1) <- block' leftBrace ts
-    return (Block stmts, ts1)
+block :: Parse Stmt
+block = block' []
 
-ifStatement :: Token -> [Token] -> StmtState
-ifStatement ifToken ts1 =
-    case ts1 of
-        Token LeftParen _:ts2 -> do
-            (cond, ts3) <- expression ts2
-            case ts3 of
-                Token RightParen _:ts4 -> do
-                    (thenStmt, ts5) <- nonDeclaration ts4
-                    case ts5 of
-                        Token Else _:ts6 -> do
-                            (elseStmt, ts7) <- nonDeclaration ts6
-                            return (IfThenElse cond thenStmt elseStmt, ts7)
+ifStatement :: Parse Stmt
+ifStatement = do
+    t <- popT
+    case t of
+        Token LeftParen _ -> do
+            cond <- expression
+            t2 <- popT
+            case t2 of
+                Token RightParen _ -> do
+                    thenStmt <- nonDeclaration
+                    t3 <- peekT
+                    case t3 of
+                        Token Else _ -> do
+                            _ <- popT
+                            elseStmt <- nonDeclaration
+                            return (IfThenElse cond thenStmt elseStmt)
                         _ ->
-                            return (IfThen cond thenStmt, ts5)
-                _ -> Left (makeTokenErr ifToken "Expect ')' after if condition.")
-        _ -> Left (makeTokenErr ifToken "Expect '(' after 'if'.")
+                            return (IfThen cond thenStmt)
+                _ -> throwTokenErr t2 "Expect ')' after if condition."
+        _ -> throwTokenErr t "Expect '(' after 'if'."
 
+nonDeclaration :: Parse Stmt
+nonDeclaration = do
+    t <- peekT
+    case t of
+        Token If _ -> popT >> ifStatement
+        Token Print _ -> popT >> printStatement
+        Token LeftBrace _ -> popT >> block
+        _ -> expressionStatement
 
-nonDeclaration :: [Token] -> StmtState
-nonDeclaration ts = case ts of
-    (t@(Token If _):ts1) ->
-        ifStatement t ts1
-    (t@(Token Print _):ts1) -> 
-        printStatement t ts1
-    t@(Token LeftBrace _):ts1 ->
-        block t ts1
-    _ -> expressionStatement ts
-
-declaration :: [Token] -> StmtState
-declaration ts = case ts of
-    (idToken@(Token (Identifier _) _):ts1) -> case ts1 of
-        (Token Equal _):ts2 -> do
-            (initExpr, ts3) <- expression ts2
-            case ts3 of
-                (Token Semicolon _):ts4 ->
-                    return (VarStmt idToken initExpr, ts4)
-                (t:_) ->
-                    Left (makeTokenErr t "Expect ';' after variable declaration.")
-                [] ->
-                    Left (LoxError 1 "" "Expect ';' after variable declaration.")
-        (Token Semicolon _):ts2 ->
-            return (VarStmtNoInit idToken, ts2)
-        (t:_) ->
-            Left (makeTokenErr t "Expect '=' or ';' after variable name.")
-        [] ->
-            Left (LoxError 1 "" "Expect '=' or ';' after variable name.")
-    (t:_) ->
-        Left (makeTokenErr t "Expect variable name.")
-    [] ->
-        Left (LoxError 1 "" "Expect variable name.")
+declaration :: Parse Stmt
+declaration = do
+    t <- popT
+    case t of
+        Token (Identifier _) _ -> do
+            t2 <- popT
+            case t2 of
+                Token Equal _ -> do
+                    expr <- expression
+                    t3 <- popT
+                    case t3 of
+                        Token Semicolon _ ->
+                            return (VarStmt t expr)
+                        _ -> throwTokenErr t3 "Expect ';' after variable declaration."
+                Token Semicolon _ ->
+                    return (VarStmtNoInit t)
+                _ -> throwTokenErr t2 "Expect '=' or ';' after variable name."
+        _ -> throwTokenErr t "Expect variable name."
 
 -- The book uses "statement" vs "declaration" somewhat confusingly.
 -- Here we use "statement" as the top-level construct, which then
 -- splits into declarations and non-declarations.
-statement :: [Token] -> StmtState
-statement ts = case ts of
-    ((Token Var _):ts1) -> 
-        declaration ts1
-    _ ->
-        nonDeclaration ts
+statement :: Parse Stmt
+statement = do
+    t <- peekT
+    case t of
+        Token Var _ -> popT >> declaration
+        _           -> nonDeclaration
 
 parse :: [Token] -> Either LoxError [Stmt]
 parse [Token EOF _] = return []
 parse ts = do
-    (stmt, ts1) <- statement ts
-    stmts <- parse ts1
-    return (stmt:stmts)
+    let (result, ts') = runState (runExceptT statement) ts
+    case result of
+        Left err -> Left err
+        Right stmt -> do
+            stmts <- parse ts'
+            return (stmt:stmts)
