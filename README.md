@@ -17,3 +17,5 @@ Implementation of Part II of https://craftinginterpreters.com/ in Haskell.
   using monads to thread the environment through the statements, instead of passing the environment around as an argument
   everywhere. It took me several existential crises to wrap my head around the monadic construct that I needed but I got
   there in the end (I think).
+- Likewise for [refactoring the parser](https://github.com/mantariksh/hlox/commit/688926c0ca9029244a4fd94d04e2169e607789ea).
+  Super satisfying to get rid of all the extra args and see all the types line up between parsing of statements and expressions.
