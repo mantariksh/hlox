@@ -6,21 +6,21 @@ module Environment
 , assignVar
 ) where
 
+import ExprOut
 import qualified Data.Map as M
-import Parse
 import LoxError
 import Token
 
-type Environment = [M.Map String Expr]
+type Environment = [M.Map String ExprOut]
 
 emptyEnv :: Environment
 emptyEnv = [M.empty]
 
-define :: Environment -> String -> Expr -> Environment
+define :: Environment -> String -> ExprOut -> Environment
 define [] s e = [M.insert s e M.empty]
 define (env:envs) s e = (M.insert s e env):envs
 
-getVar :: Environment -> Token -> Either LoxError Expr
+getVar :: Environment -> Token -> Either LoxError ExprOut
 getVar [] t = Left (makeTokenErr t "Undefined variable.")
 getVar (env:envs) t@(Token (Identifier s) _) =
     case M.lookup s env of
@@ -28,7 +28,7 @@ getVar (env:envs) t@(Token (Identifier s) _) =
         Just e  -> return e
 getVar _ t = Left (makeTokenErr t "Expected identifier.")
 
-assignVar :: Environment -> Token -> Expr -> Either LoxError Environment
+assignVar :: Environment -> Token -> ExprOut -> Either LoxError Environment
 assignVar [] t _ = Left (makeTokenErr t "Undefined variable.")
 assignVar (env:envs) t@(Token (Identifier s) _) e =
     case M.lookup s env of

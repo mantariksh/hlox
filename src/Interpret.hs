@@ -6,162 +6,101 @@ import Parse
 import Token
 import LoxError
 import Environment
+import ExprOut
 
-handleBinary :: Token -> Expr -> Expr -> Environment -> Either LoxError (Expr, Environment)
--- Need to treat + specially because it applies to both numbers and strings
-handleBinary op@(Token Plus _) e1 e2 env = case e1 of
-    Literal (Token (Number n1) ln1) -> case e2 of
-        Literal (Token (Number n2) _) ->
-            return (Literal (Token (Number (n1 + n2)) ln1), env)
-        Literal _ ->
-            Left (makeTokenErr op "Operand must be a number.")
-        _ -> do
-            (e2', env') <- evaluate e2 env
-            handleBinary op e1 e2' env'
-    Literal (Token (String s1) ln1) -> case e2 of
-        Literal (Token (String s2) _) ->
-            return (Literal (Token (String (s1 ++ s2)) ln1), env)
-        Literal _ ->
-            Left (makeTokenErr op "Operand must be a string.")
-        _ -> do
-            (e2', env') <- evaluate e2 env
-            handleBinary op e1 e2' env'
-    Literal _ ->
-        Left (makeTokenErr op "Operand must be a number or string.")
-    _ -> do
-        (e1', env') <- evaluate e1 env
-        handleBinary op e1' e2 env'
+handleBinary :: Token -> ExprOut -> ExprOut -> Either LoxError ExprOut
+handleBinary op@(Token Plus _) e1 e2 = case (e1, e2) of
+    (NumOut n1, NumOut n2) -> return $ NumOut (n1 + n2)
+    (NumOut _, _)          -> Left (makeTokenErr op "Operand must be a number.")
+    (StrOut s1, StrOut s2) -> return $ StrOut (s1 ++ s2)
+    (StrOut _, _)          -> Left (makeTokenErr op "Operand must be a string.")
+    _ -> Left (makeTokenErr op "Operand must be a number or string.")
 
-handleBinary op@(Token Minus _) e1 e2 env = binaryNumNumHelper (-) op e1 e2 env
+handleBinary op@(Token Minus _) e1 e2 = binaryNumNumHelper (-) op e1 e2
+handleBinary op@(Token Star _) e1 e2 = binaryNumNumHelper (*) op e1 e2
 
-handleBinary op@(Token Star _) e1 e2 env = binaryNumNumHelper (*) op e1 e2 env
+handleBinary op@(Token Slash _) e1 e2 = case e2 of
+    NumOut 0 -> Left (makeTokenErr op "Cannot divide by zero.")
+    _        -> binaryNumNumHelper (/) op e1 e2
 
--- Need to treat / specially because of possible division by zero
-handleBinary op@(Token Slash _) e1 e2 env = case e1 of
-    Literal (Token (Number n1) ln1) -> case e2 of
-        Literal (Token (Number 0) _) ->
-            Left (makeTokenErr op "Cannot divide by zero.")
-        Literal (Token (Number n2) _) ->
-            return (Literal (Token (Number (n1 / n2)) ln1), env)
-        Literal _ ->
-            Left (makeTokenErr op "Operand must be a number.")
-        _ -> do
-            (e2', env') <- evaluate e2 env
-            handleBinary op e1 e2' env'
-    Literal _ ->
-        Left (makeTokenErr op "Operand must be a number.")
-    _ -> do
-        (e1', env') <- evaluate e1 env
-        handleBinary op e1' e2 env'
+handleBinary (Token EqualEqual _) e1 e2 = return $ BoolOut (e1 == e2)
+handleBinary (Token BangEqual _) e1 e2 = return $ BoolOut (e1 /= e2)
 
-handleBinary op@(Token EqualEqual _) e1 e2 env =
-    case e1 of
-        Literal (Token t1 ln1) -> case e2 of
-            Literal (Token t2 _) ->
-                return (Literal (Token (if t1 == t2 then TrueToken else FalseToken) ln1), env)
-            _ -> do
-                (e2', env') <- evaluate e2 env
-                handleBinary op e1 e2' env'
-        _ -> do
-            (e1', env') <- evaluate e1 env
-            handleBinary op e1' e2 env'
+handleBinary op@(Token Greater _) e1 e2 = binaryNumBoolHelper (>) op e1 e2
+handleBinary op@(Token GreaterEqual _) e1 e2 = binaryNumBoolHelper (>=) op e1 e2
+handleBinary op@(Token Less _) e1 e2 = binaryNumBoolHelper (<) op e1 e2
+handleBinary op@(Token LessEqual _) e1 e2 = binaryNumBoolHelper (<=) op e1 e2
 
-handleBinary op@(Token BangEqual _) e1 e2 env =
-    case e1 of
-        Literal (Token t1 ln1) -> case e2 of
-            Literal (Token t2 _) ->
-                return (Literal (Token (if t1 /= t2 then TrueToken else FalseToken) ln1), env)
-            _ -> do
-                (e2', env') <- evaluate e2 env
-                handleBinary op e1 e2' env'
-        _ -> do
-            (e1', env') <- evaluate e1 env
-            handleBinary op e1' e2 env'
+handleBinary t _ _ = Left (makeTokenErr t "Unexpected token.")
 
-handleBinary op@(Token Greater _) e1 e2 env =
-    binaryNumBoolHelper (>) op e1 e2 env
-handleBinary op@(Token GreaterEqual _) e1 e2 env =
-    binaryNumBoolHelper (>=) op e1 e2 env
-handleBinary op@(Token Less _) e1 e2 env =
-    binaryNumBoolHelper (<) op e1 e2 env
-handleBinary op@(Token LessEqual _) e1 e2 env =
-    binaryNumBoolHelper (<=) op e1 e2 env
+binaryNumNumHelper :: (Double -> Double -> Double) -> Token -> ExprOut -> ExprOut -> Either LoxError ExprOut
+binaryNumNumHelper f op e1 e2 = case (e1, e2) of
+    (NumOut n1, NumOut n2) -> return $ NumOut (f n1 n2)
+    _ -> Left (makeTokenErr op "Operand must be a number.")
 
-handleBinary token _ _ _ = Left (makeTokenErr token "Unexpected token.")
+binaryNumBoolHelper :: (Double -> Double -> Bool) -> Token -> ExprOut -> ExprOut -> Either LoxError ExprOut
+binaryNumBoolHelper f op e1 e2 = case (e1, e2) of
+    (NumOut n1, NumOut n2) -> return $ BoolOut (f n1 n2)
+    _ -> Left (makeTokenErr op "Operand must be a number.")
 
-binaryNumNumHelper :: (Double -> Double -> Double) -> Token -> Expr -> Expr -> Environment -> Either LoxError (Expr, Environment)
-binaryNumNumHelper f op e1 e2 env = case e1 of
-    Literal (Token (Number n1) ln1) -> case e2 of
-        Literal (Token (Number n2) _) ->
-            return (Literal (Token (Number (f n1 n2)) ln1), env)
-        Literal _ ->
-            Left (makeTokenErr op "Operand must be a number.")
-        _ -> do
-            (e2', env') <- evaluate e2 env
-            handleBinary op e1 e2' env'
-    Literal _ ->
-        Left (makeTokenErr op "Operand must be a number.")
-    _ -> do
-        (e1', env') <- evaluate e1 env
-        handleBinary op e1' e2 env'
+handleUnary :: Token -> ExprOut -> Either LoxError ExprOut
+handleUnary op@(Token Minus _) e = case e of
+    NumOut n -> return $ NumOut (-n)
+    _        -> Left (makeTokenErr op "Expected number for negation.")
 
-binaryNumBoolHelper :: (Double -> Double -> Bool) -> Token -> Expr -> Expr -> Environment -> Either LoxError (Expr, Environment)
-binaryNumBoolHelper f op e1 e2 env = case e1 of
-    Literal (Token (Number n1) ln1) -> case e2 of
-        Literal (Token (Number n2) _) ->
-            return (Literal (Token (if f n1 n2 then TrueToken else FalseToken) ln1), env)
-        Literal _ ->
-            Left (makeTokenErr op "Operand must be a number.")
-        _ -> do
-            (e2', env') <- evaluate e2 env
-            handleBinary op e1 e2' env'
-    Literal _ ->
-        Left (makeTokenErr op "Operand must be a number.")
-    _ -> do
-        (e1', env') <- evaluate e1 env
-        handleBinary op e1' e2 env'
-
-handleUnary :: Token -> Expr -> Environment -> Either LoxError (Expr, Environment)
-handleUnary op@(Token Minus _) e env = case e of
-    Literal (Token (Number n) ln) -> return (Literal (Token (Number (-n)) ln), env)
-    Literal t -> Left (makeTokenErr t "Expected number for negation.")
-    _ -> do
-        (e', env') <- evaluate e env
-        handleUnary op e' env'
 -- As per spec, false and nil are falsey, everything else is truthy
-handleUnary op@(Token Bang _) e env = case e of
-    Literal (Token FalseToken ln) -> return (Literal (Token TrueToken ln), env)
-    Literal (Token Nil ln) -> return (Literal (Token TrueToken ln), env)
-    Literal (Token _ ln) -> return (Literal (Token FalseToken ln), env)
-    _ -> do
-        (e', env') <- evaluate e env
-        handleUnary op e' env'
-handleUnary token _ _ = Left (makeTokenErr token "Unexpected token.")
+handleUnary (Token Bang _) e = case e of
+    BoolOut False -> return $ BoolOut True
+    NilOut        -> return $ BoolOut True
+    _             -> return $ BoolOut False
 
-handleVar :: Token -> Environment -> Either LoxError (Expr, Environment)
-handleVar t@(Token (Identifier _) _) env = do
-    e <- getVar env t
-    evaluate e env
+handleUnary token _ = Left (makeTokenErr token "Unexpected token.")
+
+handleVar :: Token -> Environment -> Either LoxError ExprOut
+handleVar t@(Token (Identifier _) _) env = getVar env t
 handleVar t _ = Left (makeTokenErr t "Expected identifier.")
 
-handleAssign :: Expr -> Expr -> Environment -> Either LoxError (Expr, Environment)
+handleAssign :: Expr -> ExprOut -> Environment -> Either LoxError Environment
 handleAssign lhs rhs env =
     case lhs of
-        Variable t -> do
-            (rhs', env') <- evaluate rhs env
-            env'' <- assignVar env' t rhs'
-            return (rhs', env'')
+        Variable t -> assignVar env t rhs
         _ -> Left (LoxError 1 "" "Invalid assignment target.")
 
--- The idea is to boil down an expression to a literal value
-evaluate :: Expr -> Environment -> Either LoxError (Expr, Environment)
+litToOut :: Expr -> Either LoxError ExprOut
+litToOut (Literal lit@(Token t _)) = case t of
+    Number n -> return $ NumOut n
+    String s -> return $ StrOut s
+    TrueToken -> return $ BoolOut True
+    FalseToken -> return $ BoolOut False
+    Nil -> return $ NilOut
+    _ -> Left (makeTokenErr lit "Unexpected literal token.")
+litToOut _ = Left (LoxError 1 "" "Expected literal.")
+
+evaluate :: Expr -> Environment -> Either LoxError (ExprOut, Environment)
 evaluate expr env = case expr of
-    Literal l -> Right (Literal l, env)
+    Literal l -> do
+        out <- litToOut (Literal l)
+        return (out, env)
     Grouping e -> evaluate e env
-    Unary op e -> handleUnary op e env
-    Binary e1 op e2 -> handleBinary op e1 e2 env
-    Variable v -> handleVar v env
-    Assign lhs rhs -> handleAssign lhs rhs env
+    Unary op e -> do
+        (outR, env') <- evaluate e env
+        out <- handleUnary op outR
+        return (out, env')
+    Binary e1 op e2 -> do
+        (outL, env') <- evaluate e1 env
+        (outR, env'') <- evaluate e2 env'
+        out <- handleBinary op outL outR
+        return (out, env'')
+    Variable v -> do
+        out <- handleVar v env
+        return (out, env)
+    Assign lhs rhs -> do
+        (out, env') <- evaluate rhs env
+        -- The LHS looks like an Expr but doesn't evaluate
+        -- to a value. In technical terms, the LHS is an l-value.
+        -- e.g. obj.get().prop = 1;
+        env'' <- handleAssign lhs out env'
+        return (out, env'')
 
 interpret' :: [Stmt] -> Environment -> Either LoxError (IO ())
 interpret' [] _ = Right (return ())
@@ -180,8 +119,8 @@ interpret' ((VarStmt (Token (Identifier s) _) e):stmts') env = do
     interpret' stmts' (define env' s rhs)
 interpret' ((VarStmt t _):_) _ = Left (makeTokenErr t "Expected identifier.")
 
-interpret' (VarStmtNoInit (Token (Identifier s) ln):stmts') env =
-    interpret' stmts' (define env s (Literal (Token Nil ln)))
+interpret' (VarStmtNoInit (Token (Identifier s) _):stmts') env =
+    interpret' stmts' (define env s NilOut)
 interpret' ((VarStmtNoInit t):_) _ = Left (makeTokenErr t "Expected identifier.")
 
 interpret :: [Stmt] -> Either LoxError (IO ())
