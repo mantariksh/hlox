@@ -1,9 +1,3 @@
--- Check out archive/Scanner.hs for the old version of this, which
--- I tried to implement without properly understanding monads and
--- recursion in Haskell. Big difference!
--- I'm sure there are many more things I can improve to make this
--- more idiomatic but I'm happy with it for now.
-
 module Scan
 ( scan
 )
