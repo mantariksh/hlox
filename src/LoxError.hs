@@ -8,7 +8,7 @@ import Token
 
 type LineNo = Int
 
-data LoxError = NoError | LoxError LineNo String String
+data LoxError = NoError | LoxError LineNo String String deriving (Show)
 
 makeTokenErr :: Token -> String -> LoxError
 makeTokenErr (Token EOF ln) msg =

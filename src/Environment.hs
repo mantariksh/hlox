@@ -20,7 +20,7 @@ emptyEnv = [M.empty]
 
 define :: Environment -> String -> ExprOut -> Environment
 define [] s e = [M.insert s e M.empty]
-define (env:envs) s e = (M.insert s e env):envs
+define (env:envs) s e = M.insert s e env:envs
 
 getVar :: Environment -> Token -> Either LoxError ExprOut
 getVar [] t = Left (makeTokenErr t "Undefined variable.")

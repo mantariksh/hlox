@@ -332,6 +332,18 @@ forStatement = do
                     popOrThrow RightParen "Expect ')' after for clauses."
                     return (ExprStmt inc)
 
+returnStatement :: Token -> Parse Stmt
+returnStatement returnT = do
+    Token tType ln <- peekT
+    if tType == Semicolon
+        then do
+            _ <- popT
+            return (ReturnStmt returnT (Literal (Token Nil ln)))
+        else do
+            expr <- expression
+            popOrThrow Semicolon "Expect ';' after return value."
+            return (ReturnStmt returnT expr)
+
 nonDeclaration :: Parse Stmt
 nonDeclaration = do
     t <- peekT
@@ -339,6 +351,7 @@ nonDeclaration = do
         Token For _ -> popT >> forStatement
         Token If _ -> popT >> ifStatement
         Token Print _ -> popT >> printStatement
+        Token Return _ -> popT >>= returnStatement
         Token While _ -> popT >> whileStatement
         Token LeftBrace _ -> popT >> block
         _ -> expressionStatement
@@ -379,7 +392,7 @@ paramList = do
     t <- peekT
     case t of
         -- Handle 0 param case
-        Token RightParen _ -> return []
+        Token RightParen _ -> popT >> return []
         -- Helper handles >0 params
         _ -> paramList' []
 

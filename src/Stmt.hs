@@ -17,4 +17,6 @@ data Stmt =
   | WhileStmt Expr Stmt
   --   Identifier, params, body
   | FunStmt Token [Token] Stmt
+  --   Return keyword and expression
+  | ReturnStmt Token Expr
   deriving (Eq, Show)
