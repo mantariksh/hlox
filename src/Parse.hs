@@ -247,12 +247,13 @@ expressionStatement = do
         _ ->
             throwTokenErr t "Expect ';' after expression."
 
+-- Accumulates block statements in reverse order
 block' :: [Stmt] -> Parse Stmt
 block' stmts = do
     t <- peekT
     case t of
         Token RightBrace _ ->
-            popT >> return (Block stmts)
+            popT >> return (Block (reverse stmts))
         _ -> do
             stmt <- statement
             block' (stmt:stmts)
