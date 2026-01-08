@@ -2,7 +2,6 @@ module ExprOut
 ( ExprOut(..)
 ) where
 
-import Token
 import Stmt
 
 data ExprOut =
@@ -12,7 +11,7 @@ data ExprOut =
   | NilOut
   -- A function is a valid value produced by an expression.
   -- Original identifier, params, body
-  | FunOut Token [Token] Stmt
+  | FunOut String [String] Stmt
   deriving (Eq)
 
 instance Show ExprOut where
@@ -20,4 +19,4 @@ instance Show ExprOut where
     show (NumOut n) = show n
     show (BoolOut b) = if b then "true" else "false"
     show NilOut = "nil"
-    show (FunOut origId _ _) = "<fn " ++ show origId ++ ">"
+    show (FunOut funName _ _) = "<fn " ++ funName ++ ">"

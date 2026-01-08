@@ -112,10 +112,6 @@ handleLogical (Token Or _) e1 e2 =
 
 handleLogical t _ _ = throwRuntimeErr t "Unexpected token."
 
-paramId :: Token -> Interpret String
-paramId (Token (Identifier s) _) = return s
-paramId t = throwRuntimeErr t "Expected identifier."
-
 catchFnError :: InterpretError -> Interpret ExprOut
 catchFnError (Returned _ out) = return out
 catchFnError err@(OtherErr _) = throwError err
@@ -134,8 +130,7 @@ handleCall callee rightParen args = do
                 then throwRuntimeErr rightParen (arityErr args params)
                 else do
                     env <- pushCtx <$> get
-                    paramIds <- mapM paramId params
-                    let paramsAndArgs = zip paramIds args
+                    let paramsAndArgs = zip params args
                         env' = foldr (\(p, a) acc -> define acc p a) env paramsAndArgs
                     put env'
                     returnVal <- callFunction body
@@ -241,10 +236,9 @@ interpret' (WhileStmt cond body) = do
             interpret' (WhileStmt cond body)
         else return ()
 
-interpret' (FunStmt t@(Token (Identifier s) _) params body) = do
+interpret' (FunStmt s params body) = do
     env <- get
-    put (define env s (FunOut t params body))
-interpret' (FunStmt t _ _) = throwRuntimeErr t "Expected identifier."
+    put (define env s (FunOut s params body))
 
 interpret' (ReturnStmt returnT expr) = do
     out <- evaluate expr

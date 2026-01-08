@@ -372,22 +372,22 @@ varDeclaration = do
                 _ -> throwTokenErr t2 "Expect '=' or ';' after variable name."
         _ -> throwTokenErr t "Expect variable name."
 
-paramList' :: [Token] -> Parse [Token]
+paramList' :: [String] -> Parse [String]
 paramList' params = do
     param <- popT
     case param of
-        Token (Identifier _) _ -> do
+        Token (Identifier s) _ -> do
             nextT <- popT
             case nextT of
                 Token Comma _ ->
-                    paramList' (param:params)
+                    paramList' (s:params)
                 Token RightParen _ ->
-                    return (reverse (param:params))
+                    return (reverse (s:params))
                 _ ->
                     throwTokenErr nextT "Expect ')' after parameters."
         _ -> throwTokenErr param "Expect parameter name."
 
-paramList :: Parse [Token]
+paramList :: Parse [String]
 paramList = do
     t <- peekT
     case t of
@@ -400,12 +400,12 @@ funDeclaration :: String -> Parse Stmt
 funDeclaration kind = do
     t <- popT
     case t of
-        Token (Identifier _) _ -> do
+        Token (Identifier s) _ -> do
             popOrThrow LeftParen ("Expect '(' after " ++ kind ++ " name.")
             params <- paramList
             popOrThrow LeftBrace ("Expect '{' before " ++ kind ++ " body.")
             body <- block
-            return (FunStmt t params body)
+            return (FunStmt s params body)
         _ -> throwTokenErr t ("Expect " ++ kind ++ " name.")
 
 -- The book uses "statement" vs "declaration" somewhat confusingly.
