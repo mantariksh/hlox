@@ -30,6 +30,7 @@ data Stmt =
   | Block [Stmt]
   | IfThenElse Expr Stmt Stmt
   | IfThen Expr Stmt
+  | WhileStmt Expr Stmt
   deriving (Eq, Show)
 
 instance Show Expr where
@@ -280,12 +281,27 @@ ifStatement = do
                 _ -> throwTokenErr t2 "Expect ')' after if condition."
         _ -> throwTokenErr t "Expect '(' after 'if'."
 
+whileStatement :: Parse Stmt
+whileStatement = do
+    t <- popT
+    case t of
+        Token LeftParen _ -> do
+            cond <- expression
+            t2 <- popT
+            case t2 of
+                Token RightParen _ -> do
+                    body <- nonDeclaration
+                    return (WhileStmt cond body)
+                _ -> throwTokenErr t2 "Expect ')' after condition."
+        _ -> throwTokenErr t "Expect '(' after 'while'."
+
 nonDeclaration :: Parse Stmt
 nonDeclaration = do
     t <- peekT
     case t of
         Token If _ -> popT >> ifStatement
         Token Print _ -> popT >> printStatement
+        Token While _ -> popT >> whileStatement
         Token LeftBrace _ -> popT >> block
         _ -> expressionStatement
 

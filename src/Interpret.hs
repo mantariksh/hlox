@@ -197,6 +197,14 @@ interpret' (IfThen cond thenStmt) = do
         then interpret' thenStmt
         else return ()
 
+interpret' (WhileStmt cond body) = do
+    condOut <- evaluateM cond
+    if isTruthy condOut
+        then do
+            interpret' body
+            interpret' (WhileStmt cond body)
+        else return ()
+
 interpret :: [Stmt] -> IO (Either LoxError ())
 interpret stmts = do
     (possibleErr, _) <- runStateT (runExceptT (mapM_ interpret' stmts)) emptyEnv
