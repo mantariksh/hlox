@@ -6,8 +6,9 @@ import Parse
 import Token
 import LoxError
 import Environment
+import Expr()
+import Stmt()
 import ExprOut
-
 import Control.Monad.State
 import Control.Monad.Except
 
@@ -21,14 +22,9 @@ import Control.Monad.Except
 -- 
 type Interpret = ExceptT LoxError (StateT Environment IO)
 
--- Model expression as a state change from an initial environment
--- to another environment, outputting an Either LoxError ExprOut.
--- Environment -> (Either LoxError ExprOut, Environment) 
-type Eval = ExceptT LoxError (State Environment)
-
 -- Expression evaluation helpers
 
-handleBinary :: Token -> ExprOut -> ExprOut -> Eval ExprOut
+handleBinary :: Token -> ExprOut -> ExprOut -> Interpret ExprOut
 handleBinary op@(Token Plus _) e1 e2 = case (e1, e2) of
     (NumOut n1, NumOut n2) -> return $ NumOut (n1 + n2)
     (NumOut _, _)          -> throwError (makeTokenErr op "Operand must be a number.")
@@ -55,12 +51,12 @@ handleBinary op@(Token LessEqual _) e1 e2 = binaryNumBoolHelper (<=) op e1 e2
 
 handleBinary t _ _ = throwError (makeTokenErr t "Unexpected token.")
 
-binaryNumNumHelper :: (Double -> Double -> Double) -> Token -> ExprOut -> ExprOut -> Eval ExprOut
+binaryNumNumHelper :: (Double -> Double -> Double) -> Token -> ExprOut -> ExprOut -> Interpret ExprOut
 binaryNumNumHelper f op e1 e2 = case (e1, e2) of
     (NumOut n1, NumOut n2) -> return $ NumOut (f n1 n2)
     _ -> throwError (makeTokenErr op "Operand must be a number.")
 
-binaryNumBoolHelper :: (Double -> Double -> Bool) -> Token -> ExprOut -> ExprOut -> Eval ExprOut
+binaryNumBoolHelper :: (Double -> Double -> Bool) -> Token -> ExprOut -> ExprOut -> Interpret ExprOut
 binaryNumBoolHelper f op e1 e2 = case (e1, e2) of
     (NumOut n1, NumOut n2) -> return $ BoolOut (f n1 n2)
     _ -> throwError (makeTokenErr op "Operand must be a number.")
@@ -71,7 +67,7 @@ isTruthy (BoolOut False) = False
 isTruthy (NilOut)        = False
 isTruthy _               = True
 
-handleUnary :: Token -> ExprOut -> Eval ExprOut
+handleUnary :: Token -> ExprOut -> Interpret ExprOut
 handleUnary op@(Token Minus _) e = case e of
     NumOut n -> return $ NumOut (-n)
     _        -> throwError (makeTokenErr op "Expected number for negation.")
@@ -80,7 +76,7 @@ handleUnary (Token Bang _) e = return $ BoolOut ((not . isTruthy) e)
 
 handleUnary token _ = throwError (makeTokenErr token "Unexpected token.")
 
-handleVar :: Token -> Eval ExprOut
+handleVar :: Token -> Interpret ExprOut
 handleVar t@(Token (Identifier _) _) = do
     env <- get
     case getVar env t of
@@ -88,7 +84,7 @@ handleVar t@(Token (Identifier _) _) = do
         Right e  -> return e
 handleVar t = throwError (makeTokenErr t "Expected identifier.")
 
-handleAssign :: Expr -> ExprOut -> Eval ExprOut
+handleAssign :: Expr -> ExprOut -> Interpret ExprOut
 handleAssign lhs rhs = do
     env <- get
     case lhs of
@@ -99,7 +95,7 @@ handleAssign lhs rhs = do
             return rhs
         _ -> throwError (LoxError 1 "" "Invalid assignment target.")
 
-handleLogical :: Token -> ExprOut -> ExprOut -> Eval ExprOut
+handleLogical :: Token -> ExprOut -> ExprOut -> Interpret ExprOut
 handleLogical (Token And _) e1 e2 =
     return $ BoolOut $ isTruthy e1 && isTruthy e2
 
@@ -108,7 +104,32 @@ handleLogical (Token Or _) e1 e2 =
 
 handleLogical t _ _ = throwError (makeTokenErr t "Unexpected token.")
 
-litToOut :: Expr -> Eval ExprOut
+paramId :: Token -> Interpret String
+paramId (Token (Identifier s) _) = return s
+paramId t = throwError (makeTokenErr t "Expected identifier.")
+
+handleCall :: ExprOut -> Token -> [ExprOut] -> Interpret ExprOut
+handleCall callee rightParen args = do
+    case callee of
+        FunOut _ params body -> do
+            if length params /= length args
+                then throwError (makeTokenErr rightParen (arityErr args params))
+                else do
+                    env <- pushCtx <$> get
+                    paramIds <- mapM paramId params
+                    let paramsAndArgs = zip paramIds args
+                        env' = foldr (\(p, a) acc -> define acc p a) env paramsAndArgs
+                    put env'
+                    interpret' body
+                    env'' <- get
+                    put (popCtx env'')
+                    return $ NilOut
+        _ -> throwError (makeTokenErr rightParen "Can only call functions and classes.")
+    where
+        arityErr args' params =
+            "Expected " ++ show (length params) ++ " arguments but got " ++ show (length args') ++ "."
+
+litToOut :: Expr -> Interpret ExprOut
 litToOut (Literal lit@(Token t _)) = case t of
     Number n -> return $ NumOut n
     String s -> return $ StrOut s
@@ -118,7 +139,7 @@ litToOut (Literal lit@(Token t _)) = case t of
     _ -> throwError (makeTokenErr lit "Unexpected literal token.")
 litToOut _ = throwError (LoxError 1 "" "Expected literal.")
 
-evaluate :: Expr -> Eval ExprOut
+evaluate :: Expr -> Interpret ExprOut
 evaluate expr =
     case expr of
         lit@(Literal _) -> litToOut lit
@@ -141,32 +162,23 @@ evaluate expr =
             outL <- evaluate e1
             outR <- evaluate e2
             handleLogical op outL outR
-
--- Lift Eval a into Interpret a
-liftEval :: Eval a -> Interpret a
-liftEval eval = do
-    env <- get
-    let (result, env') = runState (runExceptT eval) env
-    put env'
-    case result of
-        Left err -> throwError err
-        Right exprOut -> return exprOut
-
-evaluateM :: Expr -> Interpret ExprOut
-evaluateM e = liftEval $ evaluate e
+        Call callee rightParen args -> do
+            calleeOut <- evaluate callee
+            argsOut <- mapM evaluate args
+            handleCall calleeOut rightParen argsOut
 
 interpret' :: Stmt -> Interpret ()
 interpret' (ExprStmt e) = do
     -- Throw away output of expression, e.g. 1 + 1;
-    _ <- evaluateM e
+    _ <- evaluate e
     return ()
 
 interpret' (PrintStmt e) = do
-    out <- evaluateM e
+    out <- evaluate e
     liftIO $ print out
 
 interpret' (VarStmt (Token (Identifier s) _) e) = do
-    rhs <- evaluateM e
+    rhs <- evaluate e
     env <- get
     put (define env s rhs)
 
@@ -186,24 +198,29 @@ interpret' (Block stmts) = do
     put (popCtx env')
 
 interpret' (IfThenElse cond thenStmt elseStmt) = do
-    condOut <- evaluateM cond
+    condOut <- evaluate cond
     if isTruthy condOut
         then interpret' thenStmt
         else interpret' elseStmt
 
 interpret' (IfThen cond thenStmt) = do
-    condOut <- evaluateM cond
+    condOut <- evaluate cond
     if isTruthy condOut
         then interpret' thenStmt
         else return ()
 
 interpret' (WhileStmt cond body) = do
-    condOut <- evaluateM cond
+    condOut <- evaluate cond
     if isTruthy condOut
         then do
             interpret' body
             interpret' (WhileStmt cond body)
         else return ()
+
+interpret' (FunStmt t@(Token (Identifier s) _) params body) = do
+    env <- get
+    put (define env s (FunOut t params body))
+interpret' (FunStmt t _ _) = throwError (makeTokenErr t "Expected identifier.")
 
 interpret :: [Stmt] -> IO (Either LoxError ())
 interpret stmts = do

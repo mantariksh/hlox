@@ -26,11 +26,13 @@ source-repository head
 library
   exposed-modules:
       Environment
+      Expr
       ExprOut
       Interpret
       LoxError
       Parse
       Scan
+      Stmt
       Token
   other-modules:
       Paths_hlox
