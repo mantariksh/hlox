@@ -360,15 +360,15 @@ varDeclaration :: Parse Stmt
 varDeclaration = do
     t <- popT
     case t of
-        Token (Identifier _) _ -> do
+        Token (Identifier s) _ -> do
             t2 <- popT
             case t2 of
                 Token Equal _ -> do
                     expr <- expression
                     popOrThrow Semicolon "Expect ';' after variable declaration."
-                    return (VarStmt t expr)
+                    return (VarStmt s expr)
                 Token Semicolon _ ->
-                    return (VarStmtNoInit t)
+                    return (VarStmtNoInit s)
                 _ -> throwTokenErr t2 "Expect '=' or ';' after variable name."
         _ -> throwTokenErr t "Expect variable name."
 

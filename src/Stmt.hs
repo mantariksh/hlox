@@ -8,8 +8,9 @@ import Token
 data Stmt =
     ExprStmt Expr
   | PrintStmt Expr
-  | VarStmt Token Expr
-  | VarStmtNoInit Token
+  -- Identifier, initializer
+  | VarStmt String Expr
+  | VarStmtNoInit String
   | Block [Stmt]
   | IfThenElse Expr Stmt Stmt
   | IfThen Expr Stmt

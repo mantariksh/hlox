@@ -190,18 +190,14 @@ interpret' (PrintStmt e) = do
     out <- evaluate e
     liftIO $ print out
 
-interpret' (VarStmt (Token (Identifier s) _) e) = do
+interpret' (VarStmt s e) = do
     rhs <- evaluate e
     env <- get
     put (define env s rhs)
 
-interpret' (VarStmt t _) = throwRuntimeErr t "Expected identifier."
-
-interpret' (VarStmtNoInit (Token (Identifier s) _)) = do
+interpret' (VarStmtNoInit s) = do
     env <- get
     put (define env s NilOut)
-
-interpret' (VarStmtNoInit t) = throwRuntimeErr t "Expected identifier."
 
 interpret' (Block stmts) = do
     env <- get
