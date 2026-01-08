@@ -50,6 +50,8 @@ data Stmt =
   | IfThen Expr Stmt
   --   Note that for loops desugar to WhileStmt
   | WhileStmt Expr Stmt
+  --   Identifier, params, body
+  | FunStmt Token [Token] Stmt
   deriving (Eq, Show)
 
 -- Model parsing as a state change from a [Token] (representing the remaining tokens)
@@ -329,7 +331,7 @@ forStatement = do
     body <- nonDeclaration
     -- We need the init statement to run before the while statement,
     -- and the increment statement to run after each execution of the body.
-    let whileStmt = WhileStmt condExpr (Block (body:incStmt:[]))
+    let whileStmt = WhileStmt condExpr (Block [body, incStmt])
     return $ Block [initStmt, whileStmt]
     where
         getInit = do
@@ -341,7 +343,7 @@ forStatement = do
                         -- No initializer, so return a statement that does nothing
                         popT >> return (ExprStmt (Literal (Token Nil ln)))
                     | tType == Var =
-                        popT >> declaration
+                        popT >> varDeclaration
                     | otherwise =
                         expressionStatement
         getCond = do
@@ -378,8 +380,8 @@ nonDeclaration = do
         Token LeftBrace _ -> popT >> block
         _ -> expressionStatement
 
-declaration :: Parse Stmt
-declaration = do
+varDeclaration :: Parse Stmt
+varDeclaration = do
     t <- popT
     case t of
         Token (Identifier _) _ -> do
@@ -394,6 +396,42 @@ declaration = do
                 _ -> throwTokenErr t2 "Expect '=' or ';' after variable name."
         _ -> throwTokenErr t "Expect variable name."
 
+paramList' :: [Token] -> Parse [Token]
+paramList' params = do
+    param <- popT
+    case param of
+        Token (Identifier _) _ -> do
+            nextT <- popT
+            case nextT of
+                Token Comma _ ->
+                    paramList' (param:params)
+                Token RightParen _ ->
+                    return (reverse (param:params))
+                _ ->
+                    throwTokenErr nextT "Expect ')' after parameters."
+        _ -> throwTokenErr param "Expect parameter name."
+
+paramList :: Parse [Token]
+paramList = do
+    t <- peekT
+    case t of
+        -- Handle 0 param case
+        Token RightParen _ -> return []
+        -- Helper handles >0 params
+        _ -> paramList' []
+
+funDeclaration :: String -> Parse Stmt
+funDeclaration kind = do
+    t <- popT
+    case t of
+        Token (Identifier _) _ -> do
+            popOrThrow LeftParen ("Expect '(' after " ++ kind ++ " name.")
+            params <- paramList
+            popOrThrow LeftBrace ("Expect '{' before " ++ kind ++ " body.")
+            body <- block
+            return (FunStmt t params body)
+        _ -> throwTokenErr t ("Expect " ++ kind ++ " name.")
+
 -- The book uses "statement" vs "declaration" somewhat confusingly.
 -- Here we use "statement" as the top-level construct, which then
 -- splits into declarations and non-declarations.
@@ -401,7 +439,8 @@ statement :: Parse Stmt
 statement = do
     t <- peekT
     case t of
-        Token Var _ -> popT >> declaration
+        Token Var _ -> popT >> varDeclaration
+        Token Fun _ -> popT >> funDeclaration "function"
         _           -> nonDeclaration
 
 parse :: [Token] -> Either LoxError [Stmt]
