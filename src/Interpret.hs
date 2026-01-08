@@ -92,8 +92,8 @@ handleVar t s = do
         Nothing -> throwRuntimeErr t "Undefined variable."
         Just e  -> return e
 
-handleAssign :: Expr -> ExprOut -> Interpret ExprOut
-handleAssign lhs rhs = do
+handleAssign :: Expr -> Token -> ExprOut -> Interpret ExprOut
+handleAssign lhs eqToken rhs = do
     env <- get
     case lhs of
         Variable t s -> do
@@ -101,7 +101,7 @@ handleAssign lhs rhs = do
                 Just env' -> put env'
                 Nothing   -> throwRuntimeErr t "Undefined variable."
             return rhs
-        _ -> throwError $ OtherErr (LoxError 1 "" "Invalid assignment target.")
+        _ -> throwRuntimeErr eqToken "Invalid assignment target."
 
 handleLogical :: Token -> ExprOut -> ExprOut -> Interpret ExprOut
 handleLogical (Token And _) e1 e2 =
@@ -158,12 +158,12 @@ evaluate expr =
             outR <- evaluate e2
             handleBinary op outL outR
         Variable t s -> handleVar t s
-        Assign lhs rhs -> do
+        Assign lhs eqToken rhs -> do
             out <- evaluate rhs
             -- The LHS looks like an Expr but doesn't evaluate
             -- to a value. In technical terms, the LHS is an l-value.
             -- e.g. obj.get().prop = 1;
-            handleAssign lhs out
+            handleAssign lhs eqToken out
         Logical e1 op e2 -> do
             outL <- evaluate e1
             outR <- evaluate e2

@@ -19,7 +19,8 @@ data Expr =
   -- exceptions, and duplicate the string to avoid unnecessary
   -- pattern matching on the token type.
   | Variable Token String
-  | Assign Expr Expr
+  -- LHS, equal sign, RHS
+  | Assign Expr Token Expr
   | Logical Expr Token Expr
   -- Callee, closing paren, arguments
   | Call Expr Token [Expr]
@@ -39,7 +40,7 @@ instance Show Expr where
     show (Unary (Token op _) e) = '(':show op ++ show e ++ ")"
     show (Binary e1 (Token op _) e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
     show (Variable _ s) = s
-    show (Assign lhs rhs) = show lhs ++ " = " ++ show rhs
+    show (Assign lhs _ rhs) = show lhs ++ " = " ++ show rhs
     show (Logical e1 op e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
     show (Call callee _ args) =
         show callee ++ "(" ++ showArgs args ++ ")"

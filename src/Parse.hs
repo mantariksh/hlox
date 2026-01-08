@@ -229,7 +229,7 @@ assignment = do
             case lhs of
                 Variable _ _ -> do
                     rhs <- assignment
-                    return (Assign lhs rhs)
+                    return (Assign lhs t rhs)
                 _ -> throwTokenErr t "Invalid assignment target."
         _ -> return lhs
 
