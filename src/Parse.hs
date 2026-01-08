@@ -30,6 +30,7 @@ data Stmt =
   | Block [Stmt]
   | IfThenElse Expr Stmt Stmt
   | IfThen Expr Stmt
+  --   Note that for loops desugar to WhileStmt
   | WhileStmt Expr Stmt
   deriving (Eq, Show)
 
@@ -278,10 +279,59 @@ whileStatement = do
     body <- nonDeclaration
     return (WhileStmt cond body)
 
+-- Desugars for loops to while statements
+forStatement :: Parse Stmt
+forStatement = do
+    popOrThrow LeftParen "Expect '(' after 'for'."
+    initStmt <- getInit
+    condExpr <- getCond
+    incStmt <- getInc
+    body <- nonDeclaration
+    -- We need the init statement to run before the while statement,
+    -- and the increment statement to run after each execution of the body.
+    let whileStmt = WhileStmt condExpr (Block (body:incStmt:[]))
+    return $ Block [initStmt, whileStmt]
+    where
+        getInit = do
+            Token tType ln <- peekT
+            initStmt tType ln
+            where
+                initStmt tType ln
+                    | tType == Semicolon =
+                        -- No initializer, so return a statement that does nothing
+                        popT >> return (ExprStmt (Literal (Token Nil ln)))
+                    | tType == Var =
+                        popT >> declaration
+                    | otherwise =
+                        expressionStatement
+        getCond = do
+            Token tType ln <- peekT
+            if tType == Semicolon
+                -- No condition, so always true
+                then do
+                    _ <- popT
+                    return (Literal (Token TrueToken ln))
+                else do
+                    cond <- expression
+                    popOrThrow Semicolon "Expect ';' after loop condition."
+                    return cond
+        getInc = do
+            Token tType ln <- peekT
+            if tType == RightParen
+                -- No increment, so return a statement that does nothing
+                then do
+                    _ <- popT
+                    return (ExprStmt (Literal (Token Nil ln)))
+                else do
+                    inc <- expression
+                    popOrThrow RightParen "Expect ')' after for clauses."
+                    return (ExprStmt inc)
+
 nonDeclaration :: Parse Stmt
 nonDeclaration = do
     t <- peekT
     case t of
+        Token For _ -> popT >> forStatement
         Token If _ -> popT >> ifStatement
         Token Print _ -> popT >> printStatement
         Token While _ -> popT >> whileStatement
