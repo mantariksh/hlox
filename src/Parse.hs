@@ -50,16 +50,16 @@ primary = do
             e <- expression
             popOrThrow RightParen "Expect ')' after expression."
             return (Grouping e)
-        Token (Number _) _ ->
-            return (Literal t)
-        Token (String _) _ ->
-            return (Literal t)
+        Token (Number n) _ ->
+            return (LitNum n)
+        Token (String s) _ ->
+            return (LitStr s)
         Token TrueToken _ ->
-            return (Literal t)
+            return (LitBool True)
         Token FalseToken _ ->
-            return (Literal t)
+            return (LitBool False)
         Token Nil _ ->
-            return (Literal t)
+            return LitNil
         Token (Identifier s) _ ->
             return (Variable t s)
         _ ->
@@ -298,35 +298,35 @@ forStatement = do
     return $ Block [initStmt, whileStmt]
     where
         getInit = do
-            Token tType ln <- peekT
-            initStmt tType ln
+            Token tType _ <- peekT
+            initStmt tType
             where
-                initStmt tType ln
+                initStmt tType
                     | tType == Semicolon =
                         -- No initializer, so return a statement that does nothing
-                        popT >> return (ExprStmt (Literal (Token Nil ln)))
+                        popT >> return (ExprStmt LitNil)
                     | tType == Var =
                         popT >> varDeclaration
                     | otherwise =
                         expressionStatement
         getCond = do
-            Token tType ln <- peekT
+            Token tType _ <- peekT
             if tType == Semicolon
                 -- No condition, so always true
                 then do
                     _ <- popT
-                    return (Literal (Token TrueToken ln))
+                    return (LitBool True)
                 else do
                     cond <- expression
                     popOrThrow Semicolon "Expect ';' after loop condition."
                     return cond
         getInc = do
-            Token tType ln <- peekT
+            Token tType _ <- peekT
             if tType == RightParen
                 -- No increment, so return a statement that does nothing
                 then do
                     _ <- popT
-                    return (ExprStmt (Literal (Token Nil ln)))
+                    return (ExprStmt LitNil)
                 else do
                     inc <- expression
                     popOrThrow RightParen "Expect ')' after for clauses."
@@ -334,11 +334,11 @@ forStatement = do
 
 returnStatement :: Token -> Parse Stmt
 returnStatement returnT = do
-    Token tType ln <- peekT
+    Token tType _ <- peekT
     if tType == Semicolon
         then do
             _ <- popT
-            return (ReturnStmt returnT (Literal (Token Nil ln)))
+            return (ReturnStmt returnT LitNil)
         else do
             expr <- expression
             popOrThrow Semicolon "Expect ';' after return value."

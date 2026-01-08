@@ -142,20 +142,13 @@ handleCall callee rightParen args = do
         arityErr args' params =
             "Expected " ++ show (length params) ++ " arguments but got " ++ show (length args') ++ "."
 
-litToOut :: Expr -> Interpret ExprOut
-litToOut (Literal lit@(Token t _)) = case t of
-    Number n -> return $ NumOut n
-    String s -> return $ StrOut s
-    TrueToken -> return $ BoolOut True
-    FalseToken -> return $ BoolOut False
-    Nil -> return $ NilOut
-    _ -> throwRuntimeErr lit "Unexpected literal token."
-litToOut _ = throwError $ OtherErr (LoxError 1 "" "Expected literal.")
-
 evaluate :: Expr -> Interpret ExprOut
 evaluate expr =
     case expr of
-        lit@(Literal _) -> litToOut lit
+        LitNum n -> return $ NumOut n
+        LitStr s -> return $ StrOut s
+        LitBool b -> return $ BoolOut b
+        LitNil -> return $ NilOut
         Grouping e -> evaluate e
         Unary op e -> do
             outR <- evaluate e

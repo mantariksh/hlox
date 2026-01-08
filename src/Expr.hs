@@ -8,7 +8,10 @@ import Token
 -- subsequently report the line number of the operation if
 -- there are evaluation errors
 data Expr =
-    Literal Token
+    LitNum Double
+  | LitStr String
+  | LitBool Bool
+  | LitNil
   | Grouping Expr
   | Unary Token Expr
   | Binary Expr Token Expr
@@ -28,7 +31,10 @@ showArgs [x] = show x
 showArgs (x:xs) = show x ++ ", " ++ showArgs xs
 
 instance Show Expr where
-    show (Literal (Token t _)) = show t
+    show (LitNum n) = show n
+    show (LitStr s) = s
+    show (LitBool b) = if b then "true" else "false"
+    show (LitNil) = "nil"
     show (Grouping e) = "(group " ++ show e ++ ")"
     show (Unary (Token op _) e) = '(':show op ++ show e ++ ")"
     show (Binary e1 (Token op _) e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
