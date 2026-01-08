@@ -2,6 +2,11 @@ Implementation of Part II of https://craftinginterpreters.com/ in Haskell.
 
 ## Things to improve in future
 
+- Adding synchronisation. I didn't bother with this part of the implementation.
+- Continuing to parse after the function argument limit is exceeded. The book
+  implementation just reports an error and carries on, but this implementation stops
+  parsing, because it wasn't straightforward to add an error-reporting side effect
+  to the otherwise pure parse function.
 - Error handling in `Parse.hs` isn't great, because I throw `LoxError 1 "" msg` in
   many places for lack of a better error to throw if there's no relevant token to
   associate with the error. But this shouldn't actually happen if the scanner works

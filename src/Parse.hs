@@ -20,7 +20,25 @@ data Expr =
   | Variable Token
   | Assign Expr Expr
   | Logical Expr Token Expr
+  -- Callee, closing paren, arguments
+  | Call Expr Token [Expr]
   deriving (Eq)
+
+showArgs :: [Expr] -> String
+showArgs [] = ""
+showArgs [x] = show x
+showArgs (x:xs) = show x ++ ", " ++ showArgs xs
+
+instance Show Expr where
+    show (Literal (Token t _)) = show t
+    show (Grouping e) = "(group " ++ show e ++ ")"
+    show (Unary (Token op _) e) = '(':show op ++ show e ++ ")"
+    show (Binary e1 (Token op _) e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
+    show (Variable (Token s _)) = show s
+    show (Assign lhs rhs) = show lhs ++ " = " ++ show rhs
+    show (Logical e1 op e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
+    show (Call callee _ args) =
+        show callee ++ "(" ++ showArgs args ++ ")"
 
 data Stmt =
     ExprStmt Expr
@@ -33,15 +51,6 @@ data Stmt =
   --   Note that for loops desugar to WhileStmt
   | WhileStmt Expr Stmt
   deriving (Eq, Show)
-
-instance Show Expr where
-    show (Literal (Token t _)) = show t
-    show (Grouping e) = "(group " ++ show e ++ ")"
-    show (Unary (Token op _) e) = '(':show op ++ show e ++ ")"
-    show (Binary e1 (Token op _) e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
-    show (Variable (Token s _)) = show s
-    show (Assign lhs rhs) = show lhs ++ " = " ++ show rhs
-    show (Logical e1 op e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
 
 -- Model parsing as a state change from a [Token] (representing the remaining tokens)
 -- to another [Token], possibly producing an error.
@@ -97,13 +106,44 @@ primary = do
         _ ->
             throwTokenErr t "Expect expression."
 
+argList :: Parse ([Expr], Token)
+argList = do
+    t@(Token tType _) <- peekT
+    -- This outer if statement handles the case of 0 args
+    if tType == RightParen
+        then return ([], t)
+        -- Helper handles >0 args
+        else argList' []
+    where
+        argList' args = do
+            arg <- expression
+            nextT <- popT
+            case nextT of
+                Token Comma _ ->
+                    argList' (arg:args)
+                Token RightParen _ ->
+                    return (reverse (arg:args), nextT)
+                _ ->
+                    throwTokenErr nextT "Expected ')' after arguments."                    
+
+call :: Parse Expr
+call = do
+    expr <- primary
+    Token tType _ <- peekT
+    if tType == LeftParen
+        then do
+            _ <- popT
+            (args, rightParen) <- argList
+            return (Call expr rightParen args)
+        else return expr
+
 unary :: Parse Expr
 unary = do
     t <- peekT
     case t of
         Token Bang _ -> unary' t
         Token Minus _ -> unary' t
-        _ -> primary
+        _ -> call
         where
             unary' op = do
                 _ <- popT
