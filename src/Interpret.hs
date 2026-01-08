@@ -85,22 +85,21 @@ handleUnary (Token Bang _) e = return $ BoolOut ((not . isTruthy) e)
 
 handleUnary token _ = throwRuntimeErr token "Unexpected token."
 
-handleVar :: Token -> Interpret ExprOut
-handleVar t@(Token (Identifier _) _) = do
+handleVar :: Token -> String ->Interpret ExprOut
+handleVar t s = do
     env <- get
-    case getVar env t of
-        Left err -> throwError (OtherErr err)
-        Right e  -> return e
-handleVar t = throwRuntimeErr t "Expected identifier."
+    case getVar env s of
+        Nothing -> throwRuntimeErr t "Undefined variable."
+        Just e  -> return e
 
 handleAssign :: Expr -> ExprOut -> Interpret ExprOut
 handleAssign lhs rhs = do
     env <- get
     case lhs of
-        Variable t -> do
-            case assignVar env t rhs of
-                Left err   -> throwError (OtherErr err)
-                Right env' -> put env'
+        Variable t s -> do
+            case assignVar env s rhs of
+                Just env' -> put env'
+                Nothing   -> throwRuntimeErr t "Undefined variable."
             return rhs
         _ -> throwError $ OtherErr (LoxError 1 "" "Invalid assignment target.")
 
@@ -170,7 +169,7 @@ evaluate expr =
             outL <- evaluate e1
             outR <- evaluate e2
             handleBinary op outL outR
-        Variable v -> handleVar v
+        Variable t s -> handleVar t s
         Assign lhs rhs -> do
             out <- evaluate rhs
             -- The LHS looks like an Expr but doesn't evaluate

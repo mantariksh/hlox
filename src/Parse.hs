@@ -60,8 +60,8 @@ primary = do
             return (Literal t)
         Token Nil _ ->
             return (Literal t)
-        Token (Identifier _) _ ->
-            return (Variable t)
+        Token (Identifier s) _ ->
+            return (Variable t s)
         _ ->
             throwTokenErr t "Expect expression."
 
@@ -227,7 +227,7 @@ assignment = do
         Token Equal _ -> do
             _ <- popT
             case lhs of
-                Variable _ -> do
+                Variable _ _ -> do
                     rhs <- assignment
                     return (Assign lhs rhs)
                 _ -> throwTokenErr t "Invalid assignment target."
