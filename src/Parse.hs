@@ -66,18 +66,21 @@ popT = do
 throwTokenErr :: Token -> String -> Parse a
 throwTokenErr t msg = throwError (makeTokenErr t msg)
 
+popOrThrow :: TokenType -> String -> Parse ()
+popOrThrow tType msg = do
+    t@(Token tType' _) <- popT
+    if tType == tType'
+        then return ()
+        else throwTokenErr t msg
+
 primary :: Parse Expr
 primary = do
     t <- popT
     case t of
         Token LeftParen _ -> do
             e <- expression
-            t2 <- popT
-            case t2 of
-                Token RightParen _ ->
-                    return (Grouping e)
-                _ ->
-                    throwTokenErr t "Expect ')' after expression."
+            popOrThrow RightParen "Expect ')' after expression."
+            return (Grouping e)
         Token (Number _) _ ->
             return (Literal t)
         Token (String _) _ ->
@@ -182,13 +185,13 @@ equality = do
 
 andExpr' :: Expr -> Parse Expr
 andExpr' lhs = do
-    t <- peekT
-    case t of
-        Token And _ -> do
+    t@(Token tType _) <- peekT
+    if tType == And
+        then do
             _ <- popT
             rhs <- equality
             andExpr' (Logical lhs t rhs)
-        _ -> return lhs
+        else return lhs
 
 andExpr :: Parse Expr
 andExpr = do
@@ -197,13 +200,13 @@ andExpr = do
 
 orExpr' :: Expr -> Parse Expr
 orExpr' lhs = do
-    t <- peekT
-    case t of
-        Token Or _ -> do
+    t@(Token tType _) <- peekT
+    if tType == Or
+        then do
             _ <- popT
             rhs <- andExpr
             orExpr' (Logical lhs t rhs)
-        _ -> return lhs
+        else return lhs
 
 orExpr :: Parse Expr
 orExpr = do
@@ -230,22 +233,14 @@ expression = assignment
 printStatement :: Parse Stmt
 printStatement = do
     expr <- expression
-    t <- popT
-    case t of
-        Token Semicolon _ ->
-            return (PrintStmt expr)
-        _ ->
-            throwTokenErr t "Expect ';' after value."
+    popOrThrow Semicolon "Expect ';' after value."
+    return (PrintStmt expr)
 
 expressionStatement :: Parse Stmt
 expressionStatement = do
     expr <- expression
-    t <- popT
-    case t of
-        Token Semicolon _ ->
-            return (ExprStmt expr)
-        _ ->
-            throwTokenErr t "Expect ';' after expression."
+    popOrThrow Semicolon "Expect ';' after expression."
+    return (ExprStmt expr)
 
 -- Accumulates block statements in reverse order
 block' :: [Stmt] -> Parse Stmt
@@ -263,38 +258,25 @@ block = block' []
 
 ifStatement :: Parse Stmt
 ifStatement = do
-    t <- popT
-    case t of
-        Token LeftParen _ -> do
-            cond <- expression
-            t2 <- popT
-            case t2 of
-                Token RightParen _ -> do
-                    thenStmt <- nonDeclaration
-                    t3 <- peekT
-                    case t3 of
-                        Token Else _ -> do
-                            _ <- popT
-                            elseStmt <- nonDeclaration
-                            return (IfThenElse cond thenStmt elseStmt)
-                        _ ->
-                            return (IfThen cond thenStmt)
-                _ -> throwTokenErr t2 "Expect ')' after if condition."
-        _ -> throwTokenErr t "Expect '(' after 'if'."
+    popOrThrow LeftParen "Expect '(' after 'if'."
+    cond <- expression
+    popOrThrow RightParen "Expect ')' after if condition."
+    thenStmt <- nonDeclaration
+    Token tType _ <- peekT
+    if tType == Else
+        then do
+            _ <- popT
+            elseStmt <- nonDeclaration
+            return (IfThenElse cond thenStmt elseStmt)
+        else return (IfThen cond thenStmt)
 
 whileStatement :: Parse Stmt
 whileStatement = do
-    t <- popT
-    case t of
-        Token LeftParen _ -> do
-            cond <- expression
-            t2 <- popT
-            case t2 of
-                Token RightParen _ -> do
-                    body <- nonDeclaration
-                    return (WhileStmt cond body)
-                _ -> throwTokenErr t2 "Expect ')' after condition."
-        _ -> throwTokenErr t "Expect '(' after 'while'."
+    popOrThrow LeftParen "Expect '(' after 'while'."
+    cond <- expression
+    popOrThrow RightParen "Expect ')' after while condition."
+    body <- nonDeclaration
+    return (WhileStmt cond body)
 
 nonDeclaration :: Parse Stmt
 nonDeclaration = do
@@ -315,11 +297,8 @@ declaration = do
             case t2 of
                 Token Equal _ -> do
                     expr <- expression
-                    t3 <- popT
-                    case t3 of
-                        Token Semicolon _ ->
-                            return (VarStmt t expr)
-                        _ -> throwTokenErr t3 "Expect ';' after variable declaration."
+                    popOrThrow Semicolon "Expect ';' after variable declaration."
+                    return (VarStmt t expr)
                 Token Semicolon _ ->
                     return (VarStmtNoInit t)
                 _ -> throwTokenErr t2 "Expect '=' or ';' after variable name."
