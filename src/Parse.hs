@@ -113,7 +113,9 @@ argList = do
     t@(Token tType _) <- peekT
     -- This outer if statement handles the case of 0 args
     if tType == RightParen
-        then return ([], t)
+        then do
+            _ <- popT
+            return ([], t)
         -- Helper handles >0 args
         else argList' []
     where
@@ -128,16 +130,20 @@ argList = do
                 _ ->
                     throwTokenErr nextT "Expected ')' after arguments."                    
 
-call :: Parse Expr
-call = do
-    expr <- primary
+call' :: Expr -> Parse Expr
+call' lhs = do
     Token tType _ <- peekT
     if tType == LeftParen
         then do
             _ <- popT
             (args, rightParen) <- argList
-            return (Call expr rightParen args)
-        else return expr
+            call' (Call lhs rightParen args)
+        else return lhs
+
+call :: Parse Expr
+call = do
+    expr <- primary
+    call' expr
 
 unary :: Parse Expr
 unary = do
