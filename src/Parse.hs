@@ -19,6 +19,7 @@ data Expr =
   | Binary Expr Token Expr
   | Variable Token
   | Assign Expr Expr
+  | Logical Expr Token Expr
   deriving (Eq)
 
 data Stmt =
@@ -34,10 +35,11 @@ data Stmt =
 instance Show Expr where
     show (Literal (Token t _)) = show t
     show (Grouping e) = "(group " ++ show e ++ ")"
-    show (Unary (Token op _) e) = '(':(show op) ++ show e ++ ")"
-    show (Binary e1 (Token op _) e2) = '(':(show e1) ++ " " ++ show op ++ " " ++ show e2 ++ ")"
+    show (Unary (Token op _) e) = '(':show op ++ show e ++ ")"
+    show (Binary e1 (Token op _) e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
     show (Variable (Token s _)) = show s
     show (Assign lhs rhs) = show lhs ++ " = " ++ show rhs
+    show (Logical e1 op e2) = '(':show e1 ++ " " ++ show op ++ " " ++ show e2 ++ ")"
 
 -- Model parsing as a state change from a [Token] (representing the remaining tokens)
 -- to another [Token], possibly producing an error.
@@ -177,9 +179,39 @@ equality = do
     lhs <- comparison
     equality' lhs
 
+andExpr' :: Expr -> Parse Expr
+andExpr' lhs = do
+    t <- peekT
+    case t of
+        Token And _ -> do
+            _ <- popT
+            rhs <- equality
+            andExpr' (Logical lhs t rhs)
+        _ -> return lhs
+
+andExpr :: Parse Expr
+andExpr = do
+    lhs <- equality
+    andExpr' lhs
+
+orExpr' :: Expr -> Parse Expr
+orExpr' lhs = do
+    t <- peekT
+    case t of
+        Token Or _ -> do
+            _ <- popT
+            rhs <- andExpr
+            orExpr' (Logical lhs t rhs)
+        _ -> return lhs
+
+orExpr :: Parse Expr
+orExpr = do
+    lhs <- andExpr
+    orExpr' lhs
+
 assignment :: Parse Expr
 assignment = do
-    lhs <- equality
+    lhs <- orExpr
     t <- peekT
     case t of
         Token Equal _ -> do

@@ -99,6 +99,15 @@ handleAssign lhs rhs = do
             return rhs
         _ -> throwError (LoxError 1 "" "Invalid assignment target.")
 
+handleLogical :: Token -> ExprOut -> ExprOut -> Eval ExprOut
+handleLogical (Token And _) e1 e2 =
+    return $ BoolOut $ isTruthy e1 && isTruthy e2
+
+handleLogical (Token Or _) e1 e2 =
+    return $ BoolOut $ isTruthy e1 || isTruthy e2
+
+handleLogical t _ _ = throwError (makeTokenErr t "Unexpected token.")
+
 litToOut :: Expr -> Eval ExprOut
 litToOut (Literal lit@(Token t _)) = case t of
     Number n -> return $ NumOut n
@@ -128,6 +137,10 @@ evaluate expr =
             -- to a value. In technical terms, the LHS is an l-value.
             -- e.g. obj.get().prop = 1;
             handleAssign lhs out
+        Logical e1 op e2 -> do
+            outL <- evaluate e1
+            outR <- evaluate e2
+            handleLogical op outL outR
 
 -- Lift Eval a into Interpret a
 liftEval :: Eval a -> Interpret a
